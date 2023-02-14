@@ -121,16 +121,16 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "focal"
+        version: "jammy"
       ppc64le:
         name: "ubuntu"
-        version: "focal"
+        version: "jammy"
       s390x:
         name: "ubuntu"
-        version: "focal"
+        version: "jammy"
       x86_64:
         name: &default-image-name "ubuntu"
-        version: "latest"
+        version: "jammy"
     meta:
       image-type: *default-image-name
 
@@ -147,7 +147,7 @@ assets:
       # there is no such Rust target
       ppc64le:
         name: &glibc-initrd-name "ubuntu"
-        version: &glibc-initrd-version "20.04"
+        version: &glibc-initrd-version "jammy"
       s390x:
         name: *glibc-initrd-name
         version: *glibc-initrd-version
