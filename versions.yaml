@@ -121,13 +121,13 @@ assets:
     architecture:
       aarch64:
         name: "ubuntu"
-        version: "latest"
+        version: "focal"
       ppc64le:
         name: "ubuntu"
-        version: "latest"
+        version: "focal"
       s390x:
         name: "ubuntu"
-        version: "latest"
+        version: "focal"
       x86_64:
         name: &default-image-name "ubuntu"
         version: "latest"

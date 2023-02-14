@@ -48,7 +48,7 @@ build_image() {
 		DISTRO="${img_distro}" \
 		DEBUG="${DEBUG:-}" \
 		USE_DOCKER="1" \
-		IMG_OS_VERSION="${img_os_version}" \
+		OS_VERSION="${img_os_version}" \
 		ROOTFS_BUILD_DEST="${builddir}/rootfs-image"
 	mv -f "kata-containers.img" "${install_dir}/${image_name}"
 	(
