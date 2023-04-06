@@ -243,7 +243,7 @@ func (s *service) genericIPTablesHandler(w http.ResponseWriter, r *http.Request,
 
 func (s *service) startManagementServer(ctx context.Context, ociSpec *specs.Spec) {
 	// metrics socket will under sandbox's bundle path
-	metricsAddress := SocketAddress(s.id)
+	metricsAddress := ServerSocketAddress(s.id)
 
 	listener, err := cdshim.NewSocket(metricsAddress)
 	if err != nil {
@@ -312,9 +312,15 @@ func GetSandboxesStoragePathRust() string {
 	return "/run/kata"
 }
 
-// SocketAddress returns the address of the unix domain socket for communicating with the
+// ServerSocketAddress returnes the address of the unix domain socket the shim management endpoint
+// should listen
+func ServerSocketAddress(id string) string {
+	return fmt.Sprintf("unix://%s", filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock"))
+}
+
+// ClientSocketAddress returns the address of the unix domain socket for communicating with the
 // shim management endpoint
-func SocketAddress(id string) string {
+func ClientSocketAddress(id string) string {
 	// get the go runtime uds path
 	socketPath := filepath.Join(string(filepath.Separator), GetSandboxesStoragePath(), id, "shim-monitor.sock")
 	// if the path not exist, use the rust runtime uds path instead
