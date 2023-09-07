@@ -827,7 +827,13 @@ func (q *QMP) ExecuteBlockdevAdd(ctx context.Context, blockDevice *BlockDevice) 
 // is enabled.  noFlush denotes whether flush requests for the device are
 // ignored.
 func (q *QMP) ExecuteBlockdevAddWithCache(ctx context.Context, blockDevice *BlockDevice, direct, noFlush bool) error {
-	blockdevArgs := q.blockdevAddBaseArgs("host_device", blockDevice)
+	var blockdevArgs map[string]interface{}
+
+	if fi, err := os.Stat(blockDevice.File); err == nil && fi.Mode().IsRegular() {
+		blockdevArgs = q.blockdevAddBaseArgs("file", blockDevice)
+	} else {
+		blockdevArgs = q.blockdevAddBaseArgs("host_device", blockDevice)
+	}
 
 	blockdevArgs["cache"] = map[string]interface{}{
 		"direct":   direct,

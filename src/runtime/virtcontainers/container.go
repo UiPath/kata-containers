@@ -19,6 +19,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/api"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	deviceUtils "github.com/kata-containers/kata-containers/src/runtime/pkg/device/drivers"
 	deviceManager "github.com/kata-containers/kata-containers/src/runtime/pkg/device/manager"
@@ -1790,11 +1791,19 @@ func (c *Container) resume(ctx context.Context) error {
 func (c *Container) hotplugDrive(ctx context.Context) error {
 	var dev device
 	var err error
+	var devicePath string
+	var fsType string
+
+	loopAttach := false
 
 	// Check to see if the rootfs is an umounted block device (source) or if the
 	// mount (target) is backed by a block device:
 	if !c.rootFs.Mounted {
-		dev, err = getDeviceForPath(c.rootFs.Source)
+		if HasOption(c.rootFs.Options, "loop") {
+			loopAttach = true
+		} else {
+			dev, err = getDeviceForPath(c.rootFs.Source)
+		}
 		// there is no "rootfs" dir on block device backed rootfs
 		c.rootfsSuffix = ""
 	} else {
@@ -1809,23 +1818,25 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 		return err
 	}
 
-	c.Logger().WithFields(logrus.Fields{
-		"device-major": dev.major,
-		"device-minor": dev.minor,
-		"mount-point":  dev.mountPoint,
-	}).Info("device details")
+	if !loopAttach {
+		c.Logger().WithFields(logrus.Fields{
+			"device-major": dev.major,
+			"device-minor": dev.minor,
+			"mount-point":  dev.mountPoint,
+		}).Info("device details")
 
-	isBD, err := checkStorageDriver(dev.major, dev.minor)
-	if err != nil {
-		return err
+		isBD, err := checkStorageDriver(dev.major, dev.minor)
+		if err != nil {
+			return err
+		}
+
+		if !isBD {
+			return nil
+		}
 	}
 
-	if !isBD {
-		return nil
-	}
-
-	devicePath := c.rootFs.Source
-	fsType := c.rootFs.Type
+	devicePath = c.rootFs.Source
+	fsType = c.rootFs.Type
 	if c.rootFs.Mounted {
 		if dev.mountPoint == c.rootFs.Target {
 			c.rootfsSuffix = ""
@@ -1847,39 +1858,68 @@ func (c *Container) hotplugDrive(ctx context.Context) error {
 		"fs-type":     fsType,
 	}).Info("Block device detected")
 
-	if err = c.plugDevice(ctx, devicePath); err != nil {
+	if err = c.plugDevice(ctx, devicePath, loopAttach); err != nil {
 		return err
+	}
+
+	if loopAttach && fsType != "" && c.state.BlockDeviceID != "" {
+		options := []string{}
+
+		for _, opt := range c.rootFs.Options {
+			if opt != "loop" {
+				options = append(options, opt)
+			}
+		}
+
+		c.rootFs.Options = options
 	}
 
 	return c.setStateFstype(fsType)
 }
 
 // plugDevice will attach the rootfs if blockdevice is supported (this is rootfs specific)
-func (c *Container) plugDevice(ctx context.Context, devicePath string) error {
+func (c *Container) plugDevice(ctx context.Context, devicePath string, loopAttach bool) error {
 	var stat unix.Stat_t
+	var err error
+	var b api.Device
 	if err := unix.Stat(devicePath, &stat); err != nil {
 		return fmt.Errorf("stat %q failed: %v", devicePath, err)
 	}
 
-	if c.checkBlockDeviceSupport(ctx) && stat.Mode&unix.S_IFBLK == unix.S_IFBLK {
-		b, err := c.sandbox.devManager.NewDevice(config.DeviceInfo{
+	if !c.checkBlockDeviceSupport(ctx) {
+		return nil
+	}
+
+	if loopAttach && stat.Mode&unix.S_IFMT == unix.S_IFREG {
+		b, err = c.sandbox.devManager.NewDevice(config.DeviceInfo{
+			HostPath:      devicePath,
+			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
+			DevType:       "b",
+			Major:         -1,
+			Minor:         0,
+		})
+	} else if stat.Mode&unix.S_IFMT == unix.S_IFBLK {
+		b, err = c.sandbox.devManager.NewDevice(config.DeviceInfo{
 			HostPath:      devicePath,
 			ContainerPath: filepath.Join(kataGuestSharedDir(), c.id),
 			DevType:       "b",
 			Major:         int64(unix.Major(uint64(stat.Rdev))),
 			Minor:         int64(unix.Minor(uint64(stat.Rdev))),
 		})
-		if err != nil {
-			return fmt.Errorf("device manager failed to create rootfs device for %q: %v", devicePath, err)
-		}
-
-		c.state.BlockDeviceID = b.DeviceID()
-
-		// attach rootfs device
-		if err := c.sandbox.devManager.AttachDevice(ctx, b.DeviceID(), c.sandbox); err != nil {
-			return err
-		}
+	} else {
+		return nil
 	}
+	if err != nil {
+		return fmt.Errorf("device manager failed to create rootfs device for %q: %v", devicePath, err)
+	}
+
+	c.state.BlockDeviceID = b.DeviceID()
+
+	// attach rootfs device
+	if err := c.sandbox.devManager.AttachDevice(ctx, b.DeviceID(), c.sandbox); err != nil {
+		return err
+	}
+
 	return nil
 }
 

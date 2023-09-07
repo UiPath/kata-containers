@@ -164,6 +164,7 @@ docker run \
 	--env CROSS_BUILD="${CROSS_BUILD}" \
 	--env TARGET_ARCH="${TARGET_ARCH}" \
 	--env ARCH="${ARCH}" \
+	--env INIT_DATA="${INIT_DATA}" \
 	--rm \
 	-w "${script_dir}" \
 	build-kata-deploy "${kata_deploy_create}" "$@"
