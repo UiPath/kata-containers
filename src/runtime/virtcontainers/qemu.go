@@ -1415,11 +1415,28 @@ func (q *qemu) hotplugAddBlockDevice(ctx context.Context, drive *config.BlockDri
 	qblkDevice := govmmQemu.BlockDevice{
 		ID:       drive.ID,
 		File:     drive.File,
+		Format:   govmmQemu.RAW,
 		ReadOnly: drive.ReadOnly,
 		AIO:      govmmQemu.BlockDeviceAIO(q.config.BlockDeviceAIO),
 	}
 
-	if drive.Swap {
+	if drive.RegularFile {
+		direct := false
+		noflush := false
+
+		if q.config.BlockDeviceCacheSet {
+			direct = q.config.BlockDeviceCacheDirect
+			noflush = q.config.BlockDeviceCacheNoflush
+		}
+		if drive.Format == config.FormatQcow2 {
+			qblkDevice.Format = govmmQemu.QCOW2
+		} else if drive.Format == config.FormatRaw {
+			qblkDevice.Format = govmmQemu.RAW
+		} else {
+			return fmt.Errorf("Unsupported file format for qemu: %v", drive.Format)
+		}
+		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithDriverCache(q.qmpMonitorCh.ctx, "file", &qblkDevice, direct, noflush)
+	} else if drive.Swap {
 		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithDriverCache(q.qmpMonitorCh.ctx, "file", &qblkDevice, false, false)
 	} else if q.config.BlockDeviceCacheSet {
 		err = q.qmpMonitorCh.qmp.ExecuteBlockdevAddWithCache(q.qmpMonitorCh.ctx, &qblkDevice, q.config.BlockDeviceCacheDirect, q.config.BlockDeviceCacheNoflush)

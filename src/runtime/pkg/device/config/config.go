@@ -89,6 +89,7 @@ const (
 const (
 	// Define the string key for DriverOptions in DeviceInfo struct
 	BlockDriverOpt = "block-driver"
+	FormatOpt      = "format"
 
 	VhostUserReconnectTimeOutOpt = "vhost-user-reconnect-timeout"
 )
@@ -223,6 +224,9 @@ type BlockDrive struct {
 
 	// This block device is for swap
 	Swap bool
+
+	// The host path points to a regular file
+	RegularFile bool
 }
 
 // VFIOMode indicates e behaviour mode for handling devices in the VM
