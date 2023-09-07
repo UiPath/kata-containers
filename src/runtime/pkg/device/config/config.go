@@ -44,6 +44,9 @@ const (
 	VhostUserFS = "vhost-user-fs-pci"
 )
 
+// Indicates that the device is backed by a host file
+const HostFileMajor int64 = -1
+
 const (
 	// VirtioMmio means use virtio-mmio for mmio based drives
 	VirtioMmio = "virtio-mmio"
@@ -105,6 +108,12 @@ const (
 	// qemu will delay this many seconds and then attempt to reconnect.  Zero
 	// disables reconnecting, and is the default.
 	DefaultVhostUserReconnectTimeOut = 0
+)
+
+// Define the values for the DriveFormat option specified in DriverOptions
+const (
+	FormatRaw   = "raw"
+	FormatQcow2 = "qcow2"
 )
 
 // Defining these as a variable instead of a const, to allow
@@ -174,7 +183,7 @@ type BlockDrive struct {
 	// File is the path to the disk-image/device which will be used with this drive
 	File string
 
-	// Format of the drive
+	// Format of the drive (raw, qcow2)
 	Format string
 
 	// ID is used to identify this drive in the hypervisor options.
@@ -350,7 +359,7 @@ func GetHostPath(devInfo DeviceInfo, vhostUserStoreEnabled bool, vhostUserStoreP
 		return "", fmt.Errorf("Empty path provided for device")
 	}
 
-	if devInfo.Major == -1 {
+	if devInfo.Major == HostFileMajor {
 		return devInfo.HostPath, nil
 	}
 
