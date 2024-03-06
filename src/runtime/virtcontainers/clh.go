@@ -285,7 +285,7 @@ var clhKernelParams = []Param{
 	{"noreplace-smp", ""},  // do not replace SMP instructions
 }
 
-var clhDebugKernelParams = []Param{
+var clhDebugSerialKernelParams = []Param{
 	{"console", "ttyS0,115200n8"}, // enable serial console
 }
 
@@ -293,7 +293,7 @@ var clhArmDebugKernelParams = []Param{
 	{"console", "ttyAMA0,115200n8"}, // enable serial console
 }
 
-var clhDebugConfidentialGuestKernelParams = []Param{
+var clhDebugConsoleKernelParams = []Param{
 	{"console", "hvc0"}, // enable HVC console
 }
 
@@ -469,7 +469,7 @@ func (clh *cloudHypervisor) enableProtection() error {
 	}
 }
 
-func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bool, debug bool, confidential bool, iommu bool, kernelVerityParams string) ([]Param, error) {
+func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bool, debug bool, confidential bool, iommu bool, legacySerial bool, kernelVerityParams string) ([]Param, error) {
 	params, err := GetKernelRootParams(rootfstype, disableNvdimm, dax, kernelVerityParams)
 	if err != nil {
 		return []Param{}, err
@@ -479,6 +479,8 @@ func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bo
 	if iommu {
 		params = append(params, Param{"iommu", "pt"})
 	}
+
+	params = append(params, clhKernelParams...)
 
 	if !debug {
 		// start the guest kernel with 'quiet' in non-debug mode
@@ -490,11 +492,15 @@ func getNonUserDefinedKernelParams(rootfstype string, disableNvdimm bool, dax bo
 
 	// Followed by extra debug parameters if debug enabled in configuration file
 	if confidential {
-		params = append(params, clhDebugConfidentialGuestKernelParams...)
+		params = append(params, clhDebugConsoleKernelParams...)
 	} else if runtime.GOARCH == "arm64" {
 		params = append(params, clhArmDebugKernelParams...)
 	} else {
-		params = append(params, clhDebugKernelParams...)
+		if legacySerial {
+			params = append(params, clhDebugSerialKernelParams...)
+		} else {
+			params = append(params, clhDebugConsoleKernelParams...)
+		}
 	}
 	params = append(params, clhDebugKernelParamsCommon...)
 	return params, nil
@@ -595,7 +601,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	disableNvdimm := true
 	enableDax := false
 
-	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU, hypervisorConfig.KernelVerityParams)
+	params, err := getNonUserDefinedKernelParams(hypervisorConfig.RootfsType, disableNvdimm, enableDax, clh.config.Debug, clh.config.ConfidentialGuest, clh.config.IOMMU, clh.config.LegacySerial, hypervisorConfig.KernelVerityParams)
 	if err != nil {
 		return err
 	}
@@ -635,17 +641,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		clh.vmconfig.Payload.SetInitramfs(assetPath)
 	}
 
-	if clh.config.ConfidentialGuest {
-		// Use HVC as the guest console only in debug mode, only
-		// for Confidential Guests
-		if clh.config.Debug {
-			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
-		} else {
-			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
-		}
-
-		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
-	} else {
+	if clh.config.LegacySerial {
 		// Use serial port as the guest console only in debug mode,
 		// so that we can gather early OS booting log
 		if clh.config.Debug {
@@ -655,6 +651,16 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		}
 
 		clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+	} else {
+		// Use HVC as the guest console only in debug mode when legacy
+		// serial flag is false
+		if clh.config.Debug {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctTTY)
+		} else {
+			clh.vmconfig.Console = chclient.NewConsoleConfig(cctOFF)
+		}
+
+		clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
 	}
 	clh.vmconfig.Console.SetIommu(clh.config.IOMMU)
 

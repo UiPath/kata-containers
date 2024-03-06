@@ -324,6 +324,9 @@ disk_rate_limiter_ops_max_rate = 0
 # set to a non zero value.
 disk_rate_limiter_ops_one_time_burst = 0
 
+# use legacy serial for guest console if available and implemented for architecture. Default false
+#use_legacy_serial = true
+
 [agent.@PROJECT_TYPE@]
 # If enabled, make the agent display debug-level messages.
 # (default: disabled)
