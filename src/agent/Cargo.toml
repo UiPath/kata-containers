@@ -105,6 +105,8 @@ test-utils.workspace = true
 
 [profile.release]
 lto = true
+codegen-units = 1
+opt-level = "s"
 
 [features]
 agent-policy = ["kata-agent-policy"]
