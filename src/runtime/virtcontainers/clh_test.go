@@ -119,6 +119,22 @@ func (c *clhClientMock) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice ch
 	return nil, nil
 }
 
+func (c *clhClientMock) PauseVM(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *clhClientMock) ResumeVM(ctx context.Context) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *clhClientMock) SaveVM(ctx context.Context, snapshotPath string) (*http.Response, error) {
+	return nil, nil
+}
+
+func (c *clhClientMock) RestoreVM(ctx context.Context, snapshotPath string) (*http.Response, error) {
+	return nil, nil
+}
+
 func TestCloudHypervisorAddVSock(t *testing.T) {
 	assert := assert.New(t)
 	clh := cloudHypervisor{}
