@@ -1249,7 +1249,7 @@ func (s *Sandbox) startVM(ctx context.Context, prestartHookFunc func(context.Con
 				return err
 			}
 
-			return vm.assignSandbox(s)
+			return vm.assignSandbox(ctx, s)
 		}
 
 		return s.hypervisor.StartVM(ctx, VmStartTimeout)
