@@ -75,8 +75,7 @@ func resetHypervisorConfig(config *vc.VMConfig) {
 	config.HypervisorConfig.MemorySize = 0
 	config.HypervisorConfig.BootToBeTemplate = false
 	config.HypervisorConfig.BootFromTemplate = false
-	config.HypervisorConfig.MemoryPath = ""
-	config.HypervisorConfig.DevicesStatePath = ""
+	config.HypervisorConfig.SnapshotStatePath = ""
 	config.HypervisorConfig.SharedPath = ""
 	config.HypervisorConfig.VMStorePath = ""
 	config.HypervisorConfig.RunStorePath = ""

@@ -193,13 +193,9 @@ type HypervisorConfig struct {
 	// emulated.
 	HypervisorMachineType string
 
-	// MemoryPath is the memory file path of VM memory. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	MemoryPath string
-
-	// DevicesStatePath is the VM device state file path. Used when either BootToBeTemplate or
-	// BootFromTemplate is true.
-	DevicesStatePath string
+	// SnapshotStatePath is the path to the folder where the state of VM
+	// resides. It can include memory, devices and so on.
+	SnapshotStatePath string
 
 	// EntropySource is the path to a host source of
 	// entropy (/dev/random, /dev/urandom or real hardware RNG device)
