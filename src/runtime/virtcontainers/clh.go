@@ -62,6 +62,7 @@ const (
 
 const (
 	clhStateCreated      = "Created"
+	clhStatePaused       = "Paused"
 	clhStateRunning      = "Running"
 	clhDefaultMemoryZone = "mem0"
 	virtioHotplugMethod  = "VirtioMem"
@@ -111,6 +112,14 @@ type clhClient interface {
 	VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error)
 	// Add/resize memory zone in VM
 	VmResizeZonePut(ctx context.Context, vmResize chclient.VmResizeZone) (*http.Response, error)
+	// Resume the VM
+	ResumeVM(ctx context.Context) (*http.Response, error)
+	// Pause the VM
+	PauseVM(ctx context.Context) (*http.Response, error)
+	// Save a snapshot of the VM
+	SaveVM(ctx context.Context, snapshotPath string) (*http.Response, error)
+	// Restore a snapshot of the VM
+	RestoreVM(ctx context.Context, snapshotPath string) (*http.Response, error)
 }
 
 type clhClientApi struct {
@@ -156,6 +165,30 @@ func (c *clhClientApi) VmAddDiskPut(ctx context.Context, diskConfig chclient.Dis
 
 func (c *clhClientApi) VmRemoveDevicePut(ctx context.Context, vmRemoveDevice chclient.VmRemoveDevice) (*http.Response, error) {
 	return c.ApiInternal.VmRemoveDevicePut(ctx).VmRemoveDevice(vmRemoveDevice).Execute()
+}
+
+func (c *clhClientApi) PauseVM(ctx context.Context) (*http.Response, error) {
+	return c.ApiInternal.PauseVM(ctx).Execute()
+}
+
+func (c *clhClientApi) ResumeVM(ctx context.Context) (*http.Response, error) {
+	return c.ApiInternal.ResumeVM(ctx).Execute()
+}
+
+func (c *clhClientApi) SaveVM(ctx context.Context, snapshotPath string) (*http.Response, error) {
+	destination := "file://" + snapshotPath
+	config := chclient.VmSnapshotConfig{
+		DestinationUrl: &destination,
+	}
+	return c.ApiInternal.VmSnapshotPut(ctx).VmSnapshotConfig(config).Execute()
+}
+
+func (c *clhClientApi) RestoreVM(ctx context.Context, snapshotPath string) (*http.Response, error) {
+	source := "file://" + snapshotPath
+	config := chclient.RestoreConfig{
+		SourceUrl: source,
+	}
+	return c.ApiInternal.VmRestorePut(ctx).RestoreConfig(config).Execute()
 }
 
 // This is done in order to be able to override such a function as part of
@@ -450,6 +483,23 @@ func (clh *cloudHypervisor) enableProtection() error {
 	}
 }
 
+func (clh *cloudHypervisor) togglePauseSandbox(ctx context.Context, pause bool) error {
+	span, _ := katatrace.Trace(ctx, clh.Logger(), "togglePauseSandbox", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	defer span.End()
+
+	cl := clh.client()
+
+	var err error
+
+	if pause {
+		_, err = cl.PauseVM(ctx)
+	} else {
+		_, err = cl.ResumeVM(ctx)
+	}
+
+	return err
+}
+
 // For cloudHypervisor this call only sets the internal structure up.
 // The VM will be created and started through StartVM().
 func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Network, hypervisorConfig *HypervisorConfig) error {
@@ -511,7 +561,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 		zone := chclient.NewMemoryZoneConfig(clhDefaultMemoryZone, int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
 		// shared memory should be enabled if using vhost-user(kata uses virtiofsd)
-		zone.Shared = func(b bool) *bool { return &b }(true)
+		zone.Shared = func(b bool) *bool { return &b }(!clh.config.BootFromTemplate)
 		// Enable hugepages if needed
 		zone.Hugepages = func(b bool) *bool { return &b }(clh.config.HugePages)
 
@@ -520,6 +570,13 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 			hotplugSize = (hotplugSize + clhMemoryAlignSize - 1) & ^(clhMemoryAlignSize - 1)
 			// OpenAPI only supports int64 values
 			zone.HotplugSize = func(i int64) *int64 { return &i }(int64((utils.MemUnit(hotplugSize) * utils.MiB).ToBytes()))
+		}
+
+		if clh.config.BootToBeTemplate {
+			filePath := clh.config.SnapshotStatePath + "/memory"
+			os.Truncate(filePath, int64((utils.MemUnit(clh.config.MemorySize) * utils.MiB).ToBytes()))
+
+			zone.File = &filePath
 		}
 
 		clh.vmconfig.Memory.Zones = &[]chclient.MemoryZoneConfig{*zone}
@@ -714,17 +771,19 @@ func (clh *cloudHypervisor) StartVM(ctx context.Context, timeout int) error {
 		defer label.SetProcessLabel("")
 	}
 
-	err = clh.setupVirtiofsDaemon(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
+	if !clh.config.BootFromTemplate && !clh.config.BootToBeTemplate {
+		err = clh.setupVirtiofsDaemon(ctx)
 		if err != nil {
-			if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
-				clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
-			}
+			return err
 		}
-	}()
+		defer func() {
+			if err != nil {
+				if shutdownErr := clh.stopVirtiofsDaemon(ctx); shutdownErr != nil {
+					clh.Logger().WithError(shutdownErr).Warn("error shutting down VirtiofsDaemon")
+				}
+			}
+		}()
+	}
 
 	err = clh.launchClh()
 	if err != nil {
@@ -1139,17 +1198,29 @@ func (clh *cloudHypervisor) Cleanup(ctx context.Context) error {
 
 func (clh *cloudHypervisor) PauseVM(ctx context.Context) error {
 	clh.Logger().WithField("function", "PauseVM").Info("Pause Sandbox")
-	return nil
+	span, ctx := katatrace.Trace(ctx, clh.Logger(), "ResumeVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	defer span.End()
+
+	return clh.togglePauseSandbox(ctx, true)
 }
 
 func (clh *cloudHypervisor) SaveVM() error {
-	clh.Logger().WithField("function", "saveSandboxC").Info("Save Sandbox")
-	return nil
+	clh.Logger().WithField("function", "SaveVM").WithField("path", "file://"+clh.config.SnapshotStatePath).Info("Save Sandbox")
+
+	cl := clh.client()
+
+	os.Create(clh.config.SnapshotStatePath + "/state")
+
+	_, err := cl.SaveVM(context.Background(), clh.config.SnapshotStatePath)
+	return err
 }
 
 func (clh *cloudHypervisor) ResumeVM(ctx context.Context) error {
 	clh.Logger().WithField("function", "ResumeVM").Info("Resume Sandbox")
-	return nil
+	span, ctx := katatrace.Trace(ctx, clh.Logger(), "ResumeVM", clhTracingTags, map[string]string{"sandbox_id": clh.id})
+	defer span.End()
+
+	return clh.togglePauseSandbox(ctx, false)
 }
 
 // StopVM will stop the Sandbox's VM.
@@ -1300,8 +1371,10 @@ func (clh *cloudHypervisor) terminate(ctx context.Context, waitOnly bool) (err e
 
 	clh.Logger().Debug("stop virtiofsDaemon")
 
-	if err = clh.stopVirtiofsDaemon(ctx); err != nil {
-		clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+	if !clh.config.BootToBeTemplate && !clh.config.BootFromTemplate {
+		if err = clh.stopVirtiofsDaemon(ctx); err != nil {
+			clh.Logger().WithError(err).Error("failed to stop virtiofsDaemon")
+		}
 	}
 
 	return
@@ -1536,16 +1609,62 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	cl := clh.client()
 
-	if clh.config.Debug {
-		bodyBuf, err := json.Marshal(clh.vmconfig)
+	if clh.config.BootFromTemplate {
+		vmPath := filepath.Join(clh.config.VMStorePath, clh.id, "template")
+		if err := os.MkdirAll(vmPath, DirMode); err != nil {
+			return err
+		}
+
+		configFilePath := filepath.Join(clh.config.SnapshotStatePath, "config.json")
+
+		buf, err := os.ReadFile(configFilePath)
 		if err != nil {
 			return err
 		}
-		clh.Logger().WithField("body", string(bodyBuf)).Debug("VM config")
-	}
-	_, err := cl.CreateVM(ctx, clh.vmconfig)
-	if err != nil {
-		return openAPIClientError(err)
+		var config chclient.VmConfig
+		if err := json.Unmarshal(buf, &config); err != nil {
+			return err
+		}
+
+		(*config.Memory.Zones)[0].Shared = func(b bool) *bool { return &b }(false)
+		config.Vsock.Socket = clh.vmconfig.Vsock.Socket
+		config.Rng = clh.vmconfig.Rng
+
+		if err := os.Symlink(filepath.Join(clh.config.SnapshotStatePath, "memory"), filepath.Join(vmPath, "memory")); err != nil {
+			return err
+		}
+		if err := os.Symlink(filepath.Join(clh.config.SnapshotStatePath, "memory-ranges"), filepath.Join(vmPath, "memory-ranges")); err != nil {
+			return err
+		}
+		if err := os.Symlink(filepath.Join(clh.config.SnapshotStatePath, "state.json"), filepath.Join(vmPath, "state.json")); err != nil {
+			return err
+		}
+
+		bodyBuf, err := json.Marshal(config)
+		if err != nil {
+			return err
+		}
+
+		if err := os.WriteFile(filepath.Join(vmPath, "config.json"), bodyBuf, 0600); err != nil {
+			return err
+		}
+
+		_, err = cl.RestoreVM(ctx, vmPath)
+		if err != nil {
+			return openAPIClientError(err)
+		}
+	} else {
+		if clh.config.Debug {
+			bodyBuf, err := json.Marshal(clh.vmconfig)
+			if err != nil {
+				return err
+			}
+			clh.Logger().WithField("body", string(bodyBuf)).Debug("VM config")
+		}
+		_, err := cl.CreateVM(ctx, clh.vmconfig)
+		if err != nil {
+			return openAPIClientError(err)
+		}
 	}
 
 	info, err := clh.vmInfo()
@@ -1555,7 +1674,11 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 
 	clh.Logger().Debugf("VM state after create: %#v", info)
 
-	if info.State != clhStateCreated {
+	if clh.config.BootFromTemplate {
+		if info.State != clhStatePaused {
+			return fmt.Errorf("VM state is not 'Paused' after 'CreateVM'")
+		}
+	} else if info.State != clhStateCreated {
 		return fmt.Errorf("VM state is not 'Created' after 'CreateVM'")
 	}
 
@@ -1564,21 +1687,23 @@ func (clh *cloudHypervisor) bootVM(ctx context.Context) error {
 		return err
 	}
 
-	clh.Logger().Debug("Booting VM")
-	_, err = cl.BootVM(ctx)
-	if err != nil {
-		return openAPIClientError(err)
-	}
+	if !clh.config.BootFromTemplate {
+		clh.Logger().Debug("Booting VM")
+		_, err = cl.BootVM(ctx)
+		if err != nil {
+			return openAPIClientError(err)
+		}
 
-	info, err = clh.vmInfo()
-	if err != nil {
-		return err
-	}
+		info, err = clh.vmInfo()
+		if err != nil {
+			return err
+		}
 
-	clh.Logger().Debugf("VM state after boot: %#v", info)
+		clh.Logger().Debugf("VM state after boot: %#v", info)
 
-	if info.State != clhStateRunning {
-		return fmt.Errorf("VM state is not 'Running' after 'BootVM'")
+		if info.State != clhStateRunning {
+			return fmt.Errorf("VM state is not 'Running' after 'BootVM'")
+		}
 	}
 
 	return nil
