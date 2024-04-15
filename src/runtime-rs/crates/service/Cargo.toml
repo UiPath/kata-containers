@@ -19,3 +19,6 @@ logging = { path = "../../../libs/logging"}
 shim-interface = { path = "../../../libs/shim-interface" }
 runtimes = { path = "../runtimes" }
 persist = { path = "../persist" }
+
+[patch.crates-io]
+ttrpc = { git = "https://github.com/UiPath/ttrpc-rust.git", branch = "flush-writes-on-shutdown" }
