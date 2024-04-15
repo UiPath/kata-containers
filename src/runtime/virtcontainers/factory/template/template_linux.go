@@ -31,7 +31,7 @@ var templateWaitForAgent = 2 * time.Second
 func Fetch(config vc.VMConfig, templatePath string) (base.FactoryBase, error) {
 	t := &template{templatePath, config}
 
-	err := t.checkTemplateVM()
+	err := t.checkTemplateVM(config)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func Fetch(config vc.VMConfig, templatePath string) (base.FactoryBase, error) {
 func New(ctx context.Context, config vc.VMConfig, templatePath string) (base.FactoryBase, error) {
 	t := &template{templatePath, config}
 
-	err := t.checkTemplateVM()
+	err := t.checkTemplateVM(config)
 	if err == nil {
 		return nil, fmt.Errorf("There is already a VM template in %s", templatePath)
 	}
@@ -123,8 +123,7 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	config := t.config
 	config.HypervisorConfig.BootToBeTemplate = true
 	config.HypervisorConfig.BootFromTemplate = false
-	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
-	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
+	config.HypervisorConfig.SnapshotStatePath = t.statePath
 
 	vm, err := vc.NewVM(ctx, config)
 	if err != nil {
@@ -160,8 +159,7 @@ func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc
 	config := t.config
 	config.HypervisorConfig.BootToBeTemplate = false
 	config.HypervisorConfig.BootFromTemplate = true
-	config.HypervisorConfig.MemoryPath = t.statePath + "/memory"
-	config.HypervisorConfig.DevicesStatePath = t.statePath + "/state"
+	config.HypervisorConfig.SnapshotStatePath = t.statePath
 	config.HypervisorConfig.SharedPath = c.HypervisorConfig.SharedPath
 	config.HypervisorConfig.VMStorePath = c.HypervisorConfig.VMStorePath
 	config.HypervisorConfig.RunStorePath = c.HypervisorConfig.RunStorePath
@@ -169,12 +167,16 @@ func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc
 	return vc.NewVM(ctx, config)
 }
 
-func (t *template) checkTemplateVM() error {
+func (t *template) checkTemplateVM(config vc.VMConfig) error {
 	_, err := os.Stat(t.statePath + "/memory")
 	if err != nil {
 		return err
 	}
 
-	_, err = os.Stat(t.statePath + "/state")
-	return err
+	if config.HypervisorType == vc.QemuHypervisor {
+		_, err = os.Stat(t.statePath + "/state")
+		return err
+	}
+
+	return nil
 }

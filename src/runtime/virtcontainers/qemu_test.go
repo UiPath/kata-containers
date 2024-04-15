@@ -618,7 +618,7 @@ func TestQemuFileBackedMem(t *testing.T) {
 	}
 	sandbox.config.HypervisorConfig.BootToBeTemplate = true
 	sandbox.config.HypervisorConfig.SharedFS = config.VirtioFS
-	sandbox.config.HypervisorConfig.MemoryPath = fallbackFileBackedMemDir
+	sandbox.config.HypervisorConfig.SnapshotStatePath = fallbackFileBackedMemDir
 
 	err = q.CreateVM(context.Background(), sandbox.id, network, &sandbox.config.HypervisorConfig)
 

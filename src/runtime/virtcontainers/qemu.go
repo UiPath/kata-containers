@@ -459,7 +459,7 @@ func (q *qemu) setupTemplate(knobs *govmmQemu.Knobs, memory *govmmQemu.Memory) g
 
 	if q.config.BootToBeTemplate || q.config.BootFromTemplate {
 		knobs.FileBackedMem = true
-		memory.Path = q.config.MemoryPath
+		memory.Path = q.config.SnapshotStatePath + "/memory"
 
 		if q.config.BootToBeTemplate {
 			knobs.MemShared = true
@@ -1141,7 +1141,7 @@ func (q *qemu) bootFromTemplate() error {
 		q.Logger().WithError(err).Error("set migration ignore shared memory")
 		return err
 	}
-	uri := fmt.Sprintf("exec:cat %s", q.config.DevicesStatePath)
+	uri := fmt.Sprintf("exec:cat %s", q.config.SnapshotStatePath+"/state")
 	err = q.qmpMonitorCh.qmp.ExecuteMigrationIncoming(q.qmpMonitorCh.ctx, uri)
 	if err != nil {
 		return err
@@ -2307,7 +2307,7 @@ func (q *qemu) SaveVM() error {
 		}
 	}
 
-	err := q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.DevicesStatePath))
+	err := q.qmpMonitorCh.qmp.ExecSetMigrateArguments(q.qmpMonitorCh.ctx, fmt.Sprintf("%s>%s", qmpExecCatCmd, q.config.SnapshotStatePath+"/state"))
 	if err != nil {
 		q.Logger().WithError(err).Error("exec migration")
 		return err

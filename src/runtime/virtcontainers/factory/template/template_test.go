@@ -79,17 +79,17 @@ func TestTemplateFactory(t *testing.T) {
 
 	assert.Equal(tt.Config(), vmConfig)
 
-	err = tt.checkTemplateVM()
+	err = tt.checkTemplateVM(vmConfig)
 	assert.Error(err)
 
 	_, err = os.Create(tt.statePath + "/memory")
 	assert.Nil(err)
-	err = tt.checkTemplateVM()
+	err = tt.checkTemplateVM(vmConfig)
 	assert.Error(err)
 
 	_, err = os.Create(tt.statePath + "/state")
 	assert.Nil(err)
-	err = tt.checkTemplateVM()
+	err = tt.checkTemplateVM(vmConfig)
 	assert.Nil(err)
 
 	err = tt.createTemplateVM(ctx)
