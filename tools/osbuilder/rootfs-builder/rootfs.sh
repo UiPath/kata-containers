@@ -614,6 +614,8 @@ EOF
 		OK "cp ${AGENT_SOURCE_BIN} ${AGENT_DEST}"
 	fi
 
+	strip ${ROOTFS_DIR}/usr/bin/kata-agent
+
 	[ -x "${AGENT_DEST}" ] || die "${AGENT_DEST} is not installed in ${ROOTFS_DIR}"
 	OK "Agent installed"
 
