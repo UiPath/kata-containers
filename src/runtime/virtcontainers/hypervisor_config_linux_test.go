@@ -77,15 +77,13 @@ func TestHypervisorConfigValidTemplateConfig(t *testing.T) {
 
 	hypervisorConfig.BootToBeTemplate = false
 	testHypervisorConfigValid(t, hypervisorConfig, false)
-	hypervisorConfig.MemoryPath = "foobar"
-	testHypervisorConfigValid(t, hypervisorConfig, false)
-	hypervisorConfig.DevicesStatePath = "foobar"
+	hypervisorConfig.SnapshotStatePath = "foobar"
 	testHypervisorConfigValid(t, hypervisorConfig, true)
 
 	hypervisorConfig.BootFromTemplate = false
 	hypervisorConfig.BootToBeTemplate = true
 	testHypervisorConfigValid(t, hypervisorConfig, true)
-	hypervisorConfig.MemoryPath = ""
+	hypervisorConfig.SnapshotStatePath = ""
 	testHypervisorConfigValid(t, hypervisorConfig, false)
 }
 

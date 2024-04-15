@@ -76,11 +76,7 @@ func TestNewVM(t *testing.T) {
 	_, err = NewVM(ctx, config)
 	assert.Error(err)
 
-	config.HypervisorConfig.MemoryPath = testDir
-	_, err = NewVM(ctx, config)
-	assert.Error(err)
-
-	config.HypervisorConfig.DevicesStatePath = testDir
+	config.HypervisorConfig.SnapshotStatePath = testDir
 	_, err = NewVM(ctx, config)
 	assert.Nil(err)
 }
