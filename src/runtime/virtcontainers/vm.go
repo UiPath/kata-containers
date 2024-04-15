@@ -33,7 +33,9 @@ type VM struct {
 	cpu    uint32
 	memory uint32
 
-	cpuDelta uint32
+	cpuDelta   uint32
+	proto      string
+	consoleURL string
 }
 
 // VMConfig is a collection of all info that a new blackbox VM needs.
@@ -103,6 +105,16 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 
 	virtLog.WithField("vm", id).WithField("config", config).Info("create new vm")
 
+	var proto string
+	var consoleURL string
+
+	if config.HypervisorConfig.Debug {
+		proto, consoleURL, err = hypervisor.GetVMConsole(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	store, err := persist.GetDriver()
 	if err != nil {
 		return nil, err
@@ -166,6 +178,8 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 		cpu:        config.HypervisorConfig.NumVCPUs,
 		memory:     config.HypervisorConfig.MemorySize,
 		store:      store,
+		proto:      proto,
+		consoleURL: consoleURL,
 	}, nil
 }
 
@@ -196,6 +210,16 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		return nil, err
 	}
 
+	var proto string
+	var consoleURL string
+
+	if config.HypervisorConfig.Debug {
+		proto, consoleURL, err = hypervisor.GetVMConsole(ctx, v.Id)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	// create agent instance
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
@@ -209,6 +233,8 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		memory:     v.Memory,
 		cpuDelta:   v.CpuDelta,
 		store:      store,
+		proto:      proto,
+		consoleURL: consoleURL,
 	}, nil
 }
 
@@ -370,6 +396,11 @@ func (v *VM) assignSandbox(ctx context.Context, s *Sandbox) error {
 
 	s.hypervisor = v.hypervisor
 	s.config.HypervisorConfig.VMid = v.id
+
+	if s.cw != nil {
+		s.cw.proto = v.proto
+		s.cw.consoleURL = v.consoleURL
+	}
 
 	return nil
 }
