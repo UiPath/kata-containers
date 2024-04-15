@@ -2762,6 +2762,7 @@ type qemuGrpc struct {
 	// q.qemuConfig.SMP.
 	// So just transport q.qemuConfig.SMP from VM Cache server to runtime.
 	QemuSMP govmmQemu.SMP
+	PidFile string
 }
 
 func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig, j []byte) error {
@@ -2785,6 +2786,7 @@ func (q *qemu) fromGrpc(ctx context.Context, hypervisorConfig *HypervisorConfig,
 	q.nvdimmCount = qp.NvdimmCount
 
 	q.qemuConfig.SMP = qp.QemuSMP
+	q.qemuConfig.PidFile = qp.PidFile
 
 	q.arch.setBridges(q.state.Bridges)
 	return nil
@@ -2801,6 +2803,7 @@ func (q *qemu) toGrpc(ctx context.Context) ([]byte, error) {
 		NvdimmCount:    q.nvdimmCount,
 
 		QemuSMP: q.qemuConfig.SMP,
+		PidFile: q.qemuConfig.PidFile,
 	}
 
 	return json.Marshal(&qp)
