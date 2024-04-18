@@ -47,4 +47,6 @@ type HypervisorState struct {
 	PCIeRootPort      int
 
 	HotplugVFIOOnRootBus bool
+	ID                   string
+	PidFile              string
 }

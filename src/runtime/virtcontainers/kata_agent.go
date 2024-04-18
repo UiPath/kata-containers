@@ -453,7 +453,7 @@ func (k *kataAgent) createSandbox(ctx context.Context, sandbox *Sandbox) error {
 	span, ctx := katatrace.Trace(ctx, k.Logger(), "createSandbox", kataAgentTracingTags)
 	defer span.End()
 
-	return k.configure(ctx, sandbox.hypervisor, sandbox.id, GetSharePath(sandbox.id), sandbox.config.AgentConfig)
+	return k.configure(ctx, sandbox.hypervisor, sandbox.id, sandbox.hypervisor.HypervisorConfig().SharedPath, sandbox.config.AgentConfig)
 }
 
 func cmdToKataProcess(cmd types.Cmd) (process *grpc.Process, err error) {
@@ -678,6 +678,7 @@ func (k *kataAgent) reuseAgent(agent agent) error {
 
 	k.installReqFunc(a.client)
 	k.client = a.client
+	k.vmSocket = a.vmSocket
 	return nil
 }
 

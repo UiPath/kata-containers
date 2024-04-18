@@ -50,7 +50,7 @@ func (g *grpccache) Config() vc.VMConfig {
 }
 
 // GetBaseVM create a new VM directly.
-func (g *grpccache) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
+func (g *grpccache) GetBaseVM(ctx context.Context) (*vc.VM, error) {
 	defer g.conn.Close()
 	gVM, err := pb.NewCacheServiceClient(g.conn).GetBaseVM(ctx, &types.Empty{})
 	if err != nil {

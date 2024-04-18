@@ -434,8 +434,7 @@ func TestCloudHypervisorCleanupVM(t *testing.T) {
 
 	clh := &cloudHypervisor{
 		config: HypervisorConfig{
-			VMStorePath:  store.RunVMStoragePath(),
-			RunStorePath: store.RunStoragePath(),
+			VMStorePath: store.RunVMStoragePath(),
 		},
 	}
 
@@ -471,7 +470,6 @@ func TestClhCreateVMWithInitrd(t *testing.T) {
 	assert.NoError(err)
 
 	clhConfig.VMStorePath = store.RunVMStoragePath()
-	clhConfig.RunStorePath = store.RunStoragePath()
 
 	network, err := NewNetwork()
 	assert.NoError(err)
@@ -504,7 +502,6 @@ func TestClhCreateVM(t *testing.T) {
 	assert.NoError(err)
 
 	clhConfig.VMStorePath = store.RunVMStoragePath()
-	clhConfig.RunStorePath = store.RunStoragePath()
 
 	network, err := NewNetwork()
 	assert.NoError(err)
@@ -541,7 +538,6 @@ func TestCloudHypervisorStartSandbox(t *testing.T) {
 	}()
 
 	clhConfig.VMStorePath = store.RunVMStoragePath()
-	clhConfig.RunStorePath = store.RunStoragePath()
 
 	clh := &cloudHypervisor{
 		config:         clhConfig,
@@ -663,8 +659,7 @@ func TestClhGenerateSocket(t *testing.T) {
 	assert.True(ok)
 
 	clh.config = HypervisorConfig{
-		VMStorePath:  "/foo",
-		RunStorePath: "/bar",
+		VMStorePath: "/foo",
 	}
 
 	clh.addVSock(1, "path")

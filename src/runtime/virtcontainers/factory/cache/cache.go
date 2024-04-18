@@ -48,7 +48,7 @@ func New(ctx context.Context, count uint, b base.FactoryBase) base.FactoryBase {
 		c.wg.Add(1)
 		go func() {
 			for {
-				vm, err := b.GetBaseVM(ctx, c.Config())
+				vm, err := b.GetBaseVM(ctx)
 				if err != nil {
 					c.wg.Done()
 					c.CloseFactory(ctx)
@@ -109,7 +109,7 @@ func (c *cache) GetVMStatus() []*pb.GrpcVMStatus {
 }
 
 // GetBaseVM returns a base VM from cache factory's base factory.
-func (c *cache) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
+func (c *cache) GetBaseVM(ctx context.Context) (*vc.VM, error) {
 	vm, ok := <-c.cacheCh
 	if ok {
 		return vm, nil

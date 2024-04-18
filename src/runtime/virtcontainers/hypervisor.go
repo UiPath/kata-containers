@@ -394,14 +394,10 @@ type HypervisorConfig struct {
 	// GuestHookPath is the path within the VM that will be used for 'drop-in' hooks
 	GuestHookPath string
 
-	// VMid is the id of the VM that create the hypervisor if the VM is created by the factory.
-	// VMid is "" if the hypervisor is not created by the factory.
-	VMid string
-
 	// VMStorePath is the location on disk where VM information will persist
 	VMStorePath string
 
-	// VMStorePath is the location on disk where runtime information will persist
+	// RunStorePath is the location on disk where sandbox runtime information will persist
 	RunStorePath string
 
 	// SELinux label for the VM

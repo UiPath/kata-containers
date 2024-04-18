@@ -726,7 +726,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		ApiInternal: chclient.NewAPIClient(cfg).DefaultApi,
 	}
 
-	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(filepath.Join(GetSharePath(clh.id)))
+	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(hypervisorConfig.SharedPath)
 	if err != nil {
 		return err
 	}
@@ -1865,16 +1865,6 @@ func (clh *cloudHypervisor) cleanupVM(force bool) error {
 				return err
 			}
 			clh.Logger().WithError(err).WithField("link", link).Warn("failed to remove resolved vm path")
-		}
-	}
-
-	if clh.config.VMid != "" {
-		dir = filepath.Join(clh.config.VMStorePath, clh.config.VMid)
-		if err := os.RemoveAll(dir); err != nil {
-			if !force {
-				return err
-			}
-			clh.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
 		}
 	}
 

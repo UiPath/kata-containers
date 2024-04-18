@@ -121,7 +121,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	}
 
 	config.HypervisorConfig.VMStorePath = store.RunVMStoragePath()
-	config.HypervisorConfig.RunStorePath = store.RunStoragePath()
+	config.HypervisorConfig.SharedPath = buildVMSharePath(id, config.HypervisorConfig.VMStorePath)
 
 	defer func() {
 		if err != nil {
@@ -139,8 +139,7 @@ func NewVM(ctx context.Context, config VMConfig) (*VM, error) {
 	newAagentFunc := getNewAgentFunc(ctx)
 	agent := newAagentFunc()
 
-	vmSharePath := buildVMSharePath(id, store.RunVMStoragePath())
-	err = agent.configure(ctx, hypervisor, id, vmSharePath, config.AgentConfig)
+	err = agent.configure(ctx, hypervisor, id, config.HypervisorConfig.SharedPath, config.AgentConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +204,10 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 		}
 	}()
 
+	hconfig := config.HypervisorConfig
+	hconfig.VMStorePath = v.VmStorePath
+	hconfig.SharedPath = v.SharedPath
+
 	err = hypervisor.fromGrpc(ctx, &config.HypervisorConfig, v.Hypervisor)
 	if err != nil {
 		return nil, err
@@ -221,8 +224,8 @@ func NewVMFromGrpc(ctx context.Context, v *pb.GrpcVM, config VMConfig) (*VM, err
 	}
 
 	// create agent instance
-	newAagentFunc := getNewAgentFunc(ctx)
-	agent := newAagentFunc()
+	newAgentFunc := getNewAgentFunc(ctx)
+	agent := newAgentFunc()
 	agent.configureFromGrpc(ctx, hypervisor, v.Id, config.AgentConfig)
 
 	return &VM{
@@ -361,10 +364,15 @@ func (v *VM) assignSandbox(ctx context.Context, s *Sandbox) error {
 	// - link vm socket from sandbox dir (/run/vc/vm/sbid/<kata.sock>) to vm dir (/run/vc/vm/vmid/<kata.sock>)
 	// - link 9pfs share path from sandbox dir (/run/kata-containers/shared/sandboxes/sbid/) to vm dir (/run/vc/vm/vmid/shared/)
 
-	vmSharePath := buildVMSharePath(v.id, v.store.RunVMStoragePath())
-	vmSockDir := filepath.Join(v.store.RunVMStoragePath(), v.id)
+	hconfig := v.hypervisor.HypervisorConfig()
+
+	vmSharePath := hconfig.SharedPath
+	vmSockDir := filepath.Join(hconfig.VMStorePath, v.id)
 	sbSharePath := getMountPath(s.id)
-	sbSockDir := filepath.Join(v.store.RunVMStoragePath(), s.id)
+	sbSockDir := filepath.Join(s.config.HypervisorConfig.VMStorePath, s.id)
+
+	hconfig.RunStorePath = filepath.Join(s.store.RunStoragePath(), s.id)
+	v.hypervisor.setConfig(&hconfig)
 
 	v.logger().WithFields(logrus.Fields{
 		"vmSharePath": vmSharePath,
@@ -395,7 +403,14 @@ func (v *VM) assignSandbox(ctx context.Context, s *Sandbox) error {
 	}
 
 	s.hypervisor = v.hypervisor
-	s.config.HypervisorConfig.VMid = v.id
+	s.state.FactoryVM = true
+	s.state.VMid = v.id
+	s.config.HypervisorConfig.VMStorePath = hconfig.VMStorePath
+	s.config.HypervisorConfig.SharedPath = hconfig.SharedPath
+
+	if err := s.addPidsToResourceController(s.hypervisor.GetPids()); err != nil {
+		return err
+	}
 
 	if s.cw != nil {
 		s.cw.proto = v.proto
@@ -416,9 +431,11 @@ func (v *VM) ToGrpc(ctx context.Context, config VMConfig) (*pb.GrpcVM, error) {
 		Id:         v.id,
 		Hypervisor: hJSON,
 
-		Cpu:      v.cpu,
-		Memory:   v.memory,
-		CpuDelta: v.cpuDelta,
+		Cpu:         v.cpu,
+		Memory:      v.memory,
+		CpuDelta:    v.cpuDelta,
+		VmStorePath: v.hypervisor.HypervisorConfig().VMStorePath,
+		SharedPath:  v.hypervisor.HypervisorConfig().SharedPath,
 	}, nil
 }
 

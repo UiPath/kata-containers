@@ -62,4 +62,10 @@ type SandboxState struct {
 
 	// GuestMemoryHotplugProbe determines whether guest kernel supports memory hotplug probe interface
 	GuestMemoryHotplugProbe bool
+
+	// FactoryVM indicates that the VM is created by a factory
+	FactoryVM bool
+
+	// VMid indicates the VM id
+	VMid string `json:"vmid"`
 }

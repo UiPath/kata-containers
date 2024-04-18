@@ -507,7 +507,7 @@ func createSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 	}
 
 	// Sandbox state has been loaded from storage.
-	// If the Stae is not empty, this is a re-creation, i.e.
+	// If the State is not empty, this is a re-creation, i.e.
 	// we don't need to talk to the guest's agent, but only
 	// want to create the sandbox and its containers in memory.
 	if s.state.State != "" {
@@ -562,7 +562,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		config:          &sandboxConfig,
 		volumes:         sandboxConfig.Volumes,
 		containers:      map[string]*Container{},
-		state:           types.SandboxState{BlockIndexMap: make(map[int]struct{})},
+		state:           types.SandboxState{BlockIndexMap: make(map[int]struct{}), VMid: sandboxConfig.ID},
 		annotationsLock: &sync.RWMutex{},
 		wg:              &sync.WaitGroup{},
 		shmSize:         sandboxConfig.ShmSize,
@@ -590,8 +590,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 		}
 	}()
 
-	sandboxConfig.HypervisorConfig.VMStorePath = s.store.RunVMStoragePath()
-	sandboxConfig.HypervisorConfig.RunStorePath = s.store.RunStoragePath()
+	sandboxConfig.HypervisorConfig.RunStorePath = filepath.Join(s.store.RunStoragePath(), s.id)
 
 	spec := s.GetPatchedOCISpec()
 	if spec != nil && spec.Process.SelinuxLabel != "" {
@@ -617,7 +616,7 @@ func newSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Factor
 	}
 
 	// store doesn't require hypervisor to be stored immediately
-	if err = s.hypervisor.CreateVM(ctx, s.id, s.network, &sandboxConfig.HypervisorConfig); err != nil {
+	if err = s.hypervisor.CreateVM(ctx, s.state.VMid, s.network, &sandboxConfig.HypervisorConfig); err != nil {
 		return nil, err
 	}
 
@@ -846,6 +845,13 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 
 	if err := s.hypervisor.Cleanup(ctx); err != nil {
 		s.Logger().WithError(err).Error("failed to Cleanup hypervisor")
+	}
+
+	if s.state.FactoryVM {
+		dir := filepath.Join(s.store.RunVMStoragePath(), s.id)
+		if err := os.Remove(dir); err != nil {
+			s.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm symlink path")
+		}
 	}
 
 	if err := s.fsShare.Cleanup(ctx); err != nil {
@@ -2336,25 +2342,31 @@ func (s *Sandbox) constrainHypervisor(ctx context.Context) error {
 	return nil
 }
 
-// setupResourceController adds the runtime process to either the sandbox resource controller or the
-// overhead one, depending on the sandbox_cgroup_only configuration setting.
-func (s *Sandbox) setupResourceController() error {
+func (s *Sandbox) addPidsToResourceController(pids []int) error {
 	vmmController := s.sandboxController
 	if s.overheadController != nil {
 		vmmController = s.overheadController
 	}
 
+	for _, pid := range pids {
+		if err := vmmController.AddProcess(pid); err != nil {
+			return fmt.Errorf("Could not add PID %d to the sandbox %s resource controller: %v", pid, vmmController, err)
+		}
+	}
+
+	return nil
+}
+
+// setupResourceController adds the runtime process to either the sandbox resource controller or the
+// overhead one, depending on the sandbox_cgroup_only configuration setting.
+func (s *Sandbox) setupResourceController() error {
+
 	// By adding the runtime process to either the sandbox or overhead controller, we are making
 	// sure that any child process of the runtime (i.e. *all* processes serving a Kata pod)
 	// will initially live in this controller. Depending on the sandbox_cgroup settings, we will
 	// then move the vCPU threads between resource controllers.
-	runtimePid := os.Getpid()
 	// Add the runtime to the VMM sandbox resource controller
-	if err := vmmController.AddProcess(runtimePid); err != nil {
-		return fmt.Errorf("Could not add runtime PID %d to the sandbox %s resource controller: %v", runtimePid, s.sandboxController, err)
-	}
-
-	return nil
+	return s.addPidsToResourceController([]int{os.Getpid()})
 }
 
 // GetPatchedOCISpec returns sandbox's OCI specification

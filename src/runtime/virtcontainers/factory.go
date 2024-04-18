@@ -23,7 +23,7 @@ type Factory interface {
 	GetVM(ctx context.Context, config VMConfig) (*VM, error)
 
 	// GetBaseVM returns a paused VM created by the base factory.
-	GetBaseVM(ctx context.Context, config VMConfig) (*VM, error)
+	GetBaseVM(ctx context.Context) (*VM, error)
 
 	// CloseFactory closes and cleans up the factory.
 	CloseFactory(ctx context.Context)

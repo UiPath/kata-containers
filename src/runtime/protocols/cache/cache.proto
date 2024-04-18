@@ -34,6 +34,9 @@ message GrpcVM {
     uint32 memory = 6;
 
     uint32 cpuDelta = 7;
+
+    string vmStorePath = 8;
+    string sharedPath = 9;
 }
 
 message GrpcStatus {

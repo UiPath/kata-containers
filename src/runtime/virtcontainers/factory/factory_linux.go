@@ -118,11 +118,11 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	err := f.checkConfig(config)
 	if err != nil {
 		f.log().WithError(err).Info("fallback to direct factory vm")
-		return direct.New(ctx, config).GetBaseVM(ctx, config)
+		return direct.New(ctx, config).GetBaseVM(ctx)
 	}
 
 	f.log().Info("get base VM")
-	vm, err := f.base.GetBaseVM(ctx, config)
+	vm, err := f.base.GetBaseVM(ctx)
 	if err != nil {
 		f.log().WithError(err).Error("failed to get base VM")
 		return nil, err
@@ -192,8 +192,8 @@ func (f *factory) GetVMStatus() []*pb.GrpcVMStatus {
 }
 
 // GetBaseVM returns a paused VM created by the base factory.
-func (f *factory) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
-	return f.base.GetBaseVM(ctx, config)
+func (f *factory) GetBaseVM(ctx context.Context) (*vc.VM, error) {
+	return f.base.GetBaseVM(ctx)
 }
 
 // CloseFactory closes the factory.

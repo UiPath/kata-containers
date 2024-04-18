@@ -65,7 +65,7 @@ func TestTemplateFactory(t *testing.T) {
 	assert.Equal(f.Config(), vmConfig)
 
 	// GetBaseVM
-	vm, err := f.GetBaseVM(ctx, vmConfig)
+	vm, err := f.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
@@ -95,13 +95,13 @@ func TestTemplateFactory(t *testing.T) {
 	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	vm, err = tt.GetBaseVM(ctx, vmConfig)
+	vm, err = tt.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
 	assert.Nil(err)
 
-	vm, err = f.GetBaseVM(ctx, vmConfig)
+	vm, err = f.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
@@ -110,13 +110,13 @@ func TestTemplateFactory(t *testing.T) {
 	err = tt.createTemplateVM(ctx)
 	assert.Nil(err)
 
-	vm, err = tt.GetBaseVM(ctx, vmConfig)
+	vm, err = tt.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)
 	assert.Nil(err)
 
-	vm, err = f.GetBaseVM(ctx, vmConfig)
+	vm, err = f.GetBaseVM(ctx)
 	assert.Nil(err)
 
 	err = vm.Stop(ctx)

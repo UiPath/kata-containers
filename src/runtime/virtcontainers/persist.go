@@ -37,6 +37,8 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	ss.State = string(s.state.State)
 	ss.SandboxCgroupPath = s.state.SandboxCgroupPath
 	ss.OverheadCgroupPath = s.state.OverheadCgroupPath
+	ss.FactoryVM = s.state.FactoryVM
+	ss.VMid = s.state.VMid
 
 	for id, cont := range s.containers {
 		state := persistapi.ContainerState{}
@@ -253,11 +255,12 @@ func (s *Sandbox) dumpConfig(ss *persistapi.SandboxState) {
 		VhostUserStorePath:      sconfig.HypervisorConfig.VhostUserStorePath,
 		VhostUserStorePathList:  sconfig.HypervisorConfig.VhostUserStorePathList,
 		GuestHookPath:           sconfig.HypervisorConfig.GuestHookPath,
-		VMid:                    sconfig.HypervisorConfig.VMid,
 		RxRateLimiterMaxRate:    sconfig.HypervisorConfig.RxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    sconfig.HypervisorConfig.TxRateLimiterMaxRate,
 		SGXEPCSize:              sconfig.HypervisorConfig.SGXEPCSize,
 		EnableAnnotations:       sconfig.HypervisorConfig.EnableAnnotations,
+		VMStorePath:             sconfig.HypervisorConfig.VMStorePath,
+		SharedPath:              sconfig.HypervisorConfig.SharedPath,
 	}
 
 	ss.Config.KataAgentConfig = &persistapi.KataAgentConfig{
@@ -305,6 +308,8 @@ func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.SandboxCgroupPath = ss.SandboxCgroupPath
 	s.state.OverheadCgroupPath = ss.OverheadCgroupPath
 	s.state.GuestMemoryHotplugProbe = ss.GuestMemoryHotplugProbe
+	s.state.FactoryVM = ss.FactoryVM
+	s.state.VMid = ss.VMid
 }
 
 func (c *Container) loadContState(cs persistapi.ContainerState) {
@@ -493,11 +498,12 @@ func loadSandboxConfig(id string) (*SandboxConfig, error) {
 		VhostUserStorePath:      hconf.VhostUserStorePath,
 		VhostUserStorePathList:  hconf.VhostUserStorePathList,
 		GuestHookPath:           hconf.GuestHookPath,
-		VMid:                    hconf.VMid,
 		RxRateLimiterMaxRate:    hconf.RxRateLimiterMaxRate,
 		TxRateLimiterMaxRate:    hconf.TxRateLimiterMaxRate,
 		SGXEPCSize:              hconf.SGXEPCSize,
 		EnableAnnotations:       hconf.EnableAnnotations,
+		VMStorePath:             hconf.VMStorePath,
+		SharedPath:              hconf.SharedPath,
 	}
 
 	sconfig.AgentConfig = KataAgentConfig{
