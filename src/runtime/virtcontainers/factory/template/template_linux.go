@@ -72,8 +72,8 @@ func (t *template) Config() vc.VMConfig {
 }
 
 // GetBaseVM creates a new paused VM from the template VM.
-func (t *template) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
-	return t.createFromTemplateVM(ctx, config)
+func (t *template) GetBaseVM(ctx context.Context) (*vc.VM, error) {
+	return t.createFromTemplateVM(ctx)
 }
 
 // CloseFactory cleans up the template VM.
@@ -155,14 +155,11 @@ func (t *template) createTemplateVM(ctx context.Context) error {
 	return nil
 }
 
-func (t *template) createFromTemplateVM(ctx context.Context, c vc.VMConfig) (*vc.VM, error) {
+func (t *template) createFromTemplateVM(ctx context.Context) (*vc.VM, error) {
 	config := t.config
 	config.HypervisorConfig.BootToBeTemplate = false
 	config.HypervisorConfig.BootFromTemplate = true
 	config.HypervisorConfig.SnapshotStatePath = t.statePath
-	config.HypervisorConfig.SharedPath = c.HypervisorConfig.SharedPath
-	config.HypervisorConfig.VMStorePath = c.HypervisorConfig.VMStorePath
-	config.HypervisorConfig.RunStorePath = c.HypervisorConfig.RunStorePath
 
 	return vc.NewVM(ctx, config)
 }

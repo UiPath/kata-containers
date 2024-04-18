@@ -203,8 +203,7 @@ func TestAcrnGetSandboxConsole(t *testing.T) {
 	a := &Acrn{
 		ctx: context.Background(),
 		config: HypervisorConfig{
-			VMStorePath:  store.RunVMStoragePath(),
-			RunStorePath: store.RunStoragePath(),
+			VMStorePath: store.RunVMStoragePath(),
 		},
 		store: store,
 	}
@@ -226,8 +225,7 @@ func TestAcrnCreateVM(t *testing.T) {
 	a := &Acrn{
 		store: store,
 		config: HypervisorConfig{
-			VMStorePath:  store.RunVMStoragePath(),
-			RunStorePath: store.RunStoragePath(),
+			VMStorePath: store.RunVMStoragePath(),
 		},
 	}
 

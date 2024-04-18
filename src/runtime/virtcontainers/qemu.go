@@ -284,12 +284,6 @@ func (q *qemu) setup(ctx context.Context, id string, hypervisorConfig *Hyperviso
 
 		q.state.HotplugVFIOOnRootBus = q.config.HotplugVFIOOnRootBus
 		q.state.PCIeRootPort = int(q.config.PCIeRootPort)
-
-		// The path might already exist, but in case of VM templating,
-		// we have to create it since the sandbox has not created it yet.
-		if err = utils.MkdirAllWithInheritedOwner(filepath.Join(q.config.RunStorePath, id), DirMode); err != nil {
-			return err
-		}
 	}
 
 	nested, err := RunningOnVMM(procCPUInfo)
@@ -1159,13 +1153,6 @@ func (q *qemu) cleanupVM() error {
 		}
 	}
 
-	if q.config.VMid != "" {
-		dir = filepath.Join(q.config.RunStorePath, q.config.VMid)
-		if err := os.RemoveAll(dir); err != nil {
-			q.Logger().WithError(err).WithField("path", dir).Warnf("failed to remove vm path")
-		}
-	}
-
 	if rootless.IsRootless() {
 		if _, err := user.Lookup(q.config.User); err != nil {
 			q.Logger().WithError(err).WithFields(
@@ -1297,12 +1284,13 @@ func (q *qemu) canDumpGuestMemory(dumpSavePath string) error {
 func (q *qemu) dumpSandboxMetaInfo(dumpSavePath string) {
 	dumpStatePath := filepath.Join(dumpSavePath, "state")
 
-	// copy state from /run/vc/sbs to memory dump directory
-	statePath := filepath.Join(q.config.RunStorePath, q.id)
-	command := []string{"/bin/cp", "-ar", statePath, dumpStatePath}
-	q.Logger().WithField("command", command).Info("try to Save sandbox state")
-	if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
-		q.Logger().WithError(err).WithField("output", output).Error("failed to Save state")
+	// copy state from /run/vc/sbs/<sbxid> to memory dump directory
+	if q.config.RunStorePath != "" {
+		command := []string{"/bin/cp", "-ar", q.config.RunStorePath, dumpStatePath}
+		q.Logger().WithField("command", command).Info("try to Save sandbox state")
+		if output, err := pkgUtils.RunCommandFull(command, true); err != nil {
+			q.Logger().WithError(err).WithField("output", output).Error("failed to Save state")
+		}
 	}
 	// Save hypervisor meta information
 	fileName := filepath.Join(dumpSavePath, "hypervisor.conf")
@@ -2707,6 +2695,7 @@ func (q *qemu) Save() (s hv.HypervisorState) {
 	s.HotpluggedMemory = q.state.HotpluggedMemory
 	s.HotplugVFIOOnRootBus = q.state.HotplugVFIOOnRootBus
 	s.PCIeRootPort = q.state.PCIeRootPort
+	s.PidFile = q.qemuConfig.PidFile
 
 	for _, bridge := range q.arch.getBridges() {
 		s.Bridges = append(s.Bridges, hv.Bridge{
@@ -2741,6 +2730,8 @@ func (q *qemu) Load(s hv.HypervisorState) {
 			ID: cpu.ID,
 		})
 	}
+
+	q.qemuConfig.PidFile = s.PidFile
 }
 
 func (q *qemu) Check() error {

@@ -69,7 +69,7 @@ func (s *cacheServer) Config(ctx context.Context, empty *types.Empty) (*pb.GrpcV
 func (s *cacheServer) GetBaseVM(ctx context.Context, empty *types.Empty) (*pb.GrpcVM, error) {
 	config := s.factory.Config()
 
-	vm, err := s.factory.GetBaseVM(ctx, config)
+	vm, err := s.factory.GetBaseVM(ctx)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to GetBaseVM")
 	}

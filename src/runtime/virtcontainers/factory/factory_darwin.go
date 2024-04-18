@@ -34,7 +34,7 @@ func (f *factory) GetVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error)
 	return nil, unsupportedFactory
 }
 
-func (f *factory) GetBaseVM(ctx context.Context, config vc.VMConfig) (*vc.VM, error) {
+func (f *factory) GetBaseVM(ctx context.Context) (*vc.VM, error) {
 	return nil, unsupportedFactory
 }
 

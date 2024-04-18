@@ -13,8 +13,10 @@ import (
 	deviceConfig "github.com/kata-containers/kata-containers/src/runtime/pkg/device/config"
 	"github.com/kata-containers/kata-containers/src/runtime/pkg/katautils/katatrace"
 	resCtrl "github.com/kata-containers/kata-containers/src/runtime/pkg/resourcecontrol"
+	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/persist"
 	"github.com/kata-containers/kata-containers/src/runtime/virtcontainers/pkg/compatoci"
 	vcTypes "github.com/kata-containers/kata-containers/src/runtime/virtcontainers/types"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -56,6 +58,14 @@ func CreateSandbox(ctx context.Context, sandboxConfig SandboxConfig, factory Fac
 func createSandboxFromConfig(ctx context.Context, sandboxConfig SandboxConfig, factory Factory, prestartHookFunc func(context.Context) error) (_ *Sandbox, err error) {
 	span, ctx := katatrace.Trace(ctx, virtLog, "createSandboxFromConfig", apiTracingTags)
 	defer span.End()
+
+	store, err := persist.GetDriver()
+	if err != nil || store == nil {
+		return nil, errors.New("failed to get fs persist driver")
+	}
+
+	sandboxConfig.HypervisorConfig.SharedPath = GetSharePath(sandboxConfig.ID)
+	sandboxConfig.HypervisorConfig.VMStorePath = store.RunVMStoragePath()
 
 	// Create the sandbox.
 	s, err := createSandbox(ctx, sandboxConfig, factory)

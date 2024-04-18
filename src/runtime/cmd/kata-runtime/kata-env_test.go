@@ -915,7 +915,6 @@ func TestGetHypervisorInfoSocket(t *testing.T) {
 	}
 
 	config.HypervisorConfig.VMStorePath = "/foo"
-	config.HypervisorConfig.RunStorePath = "/bar"
 
 	for i, details := range hypervisors {
 		msg := fmt.Sprintf("hypervisor[%d]: %+v", i, details)
