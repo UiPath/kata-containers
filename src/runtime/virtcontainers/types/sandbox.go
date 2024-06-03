@@ -76,6 +76,9 @@ type SandboxState struct {
 
 	// VMid indicates the VM id
 	VMid string `json:"vmid"`
+
+	// ResourceControllerType contains the cgroup controller used to manage the sandbox cgroups
+	ResourceControllerType string `json:"resourceControllerType"`
 }
 
 // Valid checks that the sandbox state is valid.

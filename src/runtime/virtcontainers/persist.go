@@ -39,6 +39,7 @@ func (s *Sandbox) dumpState(ss *persistapi.SandboxState, cs map[string]persistap
 	ss.OverheadCgroupPath = s.state.OverheadCgroupPath
 	ss.FactoryVM = s.state.FactoryVM
 	ss.VMid = s.state.VMid
+	ss.ResourceControllerType = s.state.ResourceControllerType
 
 	for id, cont := range s.containers {
 		state := persistapi.ContainerState{}
@@ -310,6 +311,7 @@ func (s *Sandbox) loadState(ss persistapi.SandboxState) {
 	s.state.GuestMemoryHotplugProbe = ss.GuestMemoryHotplugProbe
 	s.state.FactoryVM = ss.FactoryVM
 	s.state.VMid = ss.VMid
+	s.state.ResourceControllerType = ss.ResourceControllerType
 }
 
 func (c *Container) loadContState(cs persistapi.ContainerState) {

@@ -25,15 +25,20 @@ func SetLogger(logger *logrus.Entry) {
 type ResourceControllerType string
 
 const (
-	LinuxCgroups                 ResourceControllerType = "cgroups"
+	LinuxCgroupfs                ResourceControllerType = "cgroupfs"
+	LinuxSystemd                 ResourceControllerType = "systemd"
 	DarwinResourceControllerType ResourceControllerType = "darwin"
 )
 
 // String converts a resource type to a string.
 func (rType *ResourceControllerType) String() string {
 	switch *rType {
-	case LinuxCgroups:
-		return string(LinuxCgroups)
+	case LinuxCgroupfs:
+		return string(LinuxCgroupfs)
+	case LinuxSystemd:
+		return string(LinuxSystemd)
+	case DarwinResourceControllerType:
+		return string(DarwinResourceControllerType)
 	default:
 		return "Unknown controller type"
 	}

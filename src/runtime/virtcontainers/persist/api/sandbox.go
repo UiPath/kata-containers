@@ -68,4 +68,7 @@ type SandboxState struct {
 
 	// VMid indicates the VM id
 	VMid string `json:"vmid"`
+
+	// ResourceControllerType determines the cgroup manager used to create cgroups
+	ResourceControllerType string
 }
