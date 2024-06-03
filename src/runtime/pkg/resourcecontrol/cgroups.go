@@ -45,6 +45,7 @@ type LinuxCgroup struct {
 	path    string
 	cpusets *specs.LinuxCPU
 	devices []specs.LinuxDeviceCgroup
+	rtype   ResourceControllerType
 
 	sync.Mutex
 }
@@ -171,6 +172,7 @@ func NewResourceController(path string, resources *specs.LinuxResources) (Resour
 		devices: resources.Devices,
 		cpusets: resources.CPU,
 		cgroup:  cgroup,
+		rtype:   LinuxCgroupfs,
 	}, nil
 }
 
@@ -201,7 +203,7 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 
 	// Create systemd cgroup
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, LinuxSystemd)
 		if err != nil {
 			return nil, err
 		}
@@ -232,16 +234,17 @@ func NewSandboxResourceController(path string, resources *specs.LinuxResources, 
 		devices: sandboxResources.Devices,
 		cpusets: sandboxResources.CPU,
 		cgroup:  cgroup,
+		rtype:   LinuxSystemd,
 	}, nil
 }
 
-func LoadResourceController(path string) (ResourceController, error) {
+func LoadResourceController(path string, controllerType ResourceControllerType) (ResourceController, error) {
 	var err error
 	var cgroup interface{}
 
 	// load created cgroup and update with resources
 	if cgroups.Mode() == cgroups.Legacy || cgroups.Mode() == cgroups.Hybrid {
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, controllerType)
 		if err != nil {
 			return nil, err
 		}
@@ -251,7 +254,7 @@ func LoadResourceController(path string) (ResourceController, error) {
 			return nil, err
 		}
 	} else if cgroups.Mode() == cgroups.Unified {
-		if IsSystemdCgroup(path) {
+		if controllerType == LinuxSystemd {
 			slice, unit, err := getSliceAndUnit(path)
 			if err != nil {
 				return nil, err
@@ -273,6 +276,7 @@ func LoadResourceController(path string) (ResourceController, error) {
 	return &LinuxCgroup{
 		path:   path,
 		cgroup: cgroup,
+		rtype:  controllerType,
 	}, nil
 }
 
@@ -285,7 +289,7 @@ func (c *LinuxCgroup) Delete() error {
 	case cgroups.Cgroup:
 		return cg.Delete()
 	case *cgroupsv2.Manager:
-		if IsSystemdCgroup(c.ID()) {
+		if c.rtype == LinuxSystemd {
 			if err := cg.DeleteSystemd(); err != nil {
 				return err
 			}
@@ -343,7 +347,7 @@ func (c *LinuxCgroup) Update(resources *specs.LinuxResources) error {
 func (c *LinuxCgroup) MoveTo(path string) error {
 	switch cg := c.cgroup.(type) {
 	case cgroups.Cgroup:
-		cgHierarchy, cgPath, err := cgroupHierarchy(path)
+		cgHierarchy, cgPath, err := cgroupHierarchy(path, c.rtype)
 		if err != nil {
 			return err
 		}
@@ -353,9 +357,23 @@ func (c *LinuxCgroup) MoveTo(path string) error {
 		}
 		return cg.MoveTo(newCgroup)
 	case *cgroupsv2.Manager:
-		newCgroup, err := cgroupsv2.LoadManager(unifiedMountpoint, path)
-		if err != nil {
-			return err
+		var newCgroup *cgroupsv2.Manager
+		var err error
+
+		if c.rtype == LinuxSystemd {
+			slice, unit, err := getSliceAndUnit(path)
+			if err != nil {
+				return err
+			}
+			newCgroup, err = cgroupsv2.LoadSystemd(slice, unit)
+			if err != nil {
+				return err
+			}
+		} else {
+			newCgroup, err = cgroupsv2.LoadManager(unifiedMountpoint, path)
+			if err != nil {
+				return err
+			}
 		}
 		return cg.MoveTo(newCgroup)
 	default:
@@ -468,7 +486,7 @@ func (c *LinuxCgroup) UpdateCpuSet(cpuset, memset string) error {
 }
 
 func (c *LinuxCgroup) Type() ResourceControllerType {
-	return LinuxCgroups
+	return c.rtype
 }
 
 func (c *LinuxCgroup) ID() string {

@@ -20,6 +20,7 @@ import (
 	"sync"
 	"syscall"
 
+	"github.com/containerd/cgroups"
 	v1 "github.com/containerd/cgroups/stats/v1"
 	v2 "github.com/containerd/cgroups/v2/stats"
 	specs "github.com/opencontainers/runtime-spec/specs-go"
@@ -735,6 +736,7 @@ func (s *Sandbox) createResourceController() error {
 
 	// Now that the sandbox resource controller is created, we can set the state controller paths.
 	s.state.SandboxCgroupPath = s.sandboxController.ID()
+	s.state.ResourceControllerType = string(s.sandboxController.Type())
 	s.state.OverheadCgroupPath = ""
 
 	if s.config.SandboxCgroupOnly {
@@ -833,7 +835,7 @@ func (s *Sandbox) Delete(ctx context.Context) error {
 		}
 	}
 
-	if !rootless.IsRootless() {
+	if !rootless.IsRootless() && s.state.ResourceControllerType != string(resCtrl.LinuxSystemd) {
 		if err := s.resourceControllerDelete(); err != nil {
 			s.Logger().WithError(err).Errorf("failed to cleanup the %s resource controllers", s.sandboxController)
 		}
@@ -2286,18 +2288,25 @@ func (s *Sandbox) resourceControllerUpdate(ctx context.Context) error {
 // resourceControllerDelete will move the running processes in the sandbox resource
 // cvontroller to the parent and then delete the sandbox controller.
 func (s *Sandbox) resourceControllerDelete() error {
-	s.Logger().Debugf("Deleting sandbox %s resource controler", s.sandboxController)
+	var resCtrlParent string
+	s.Logger().Debugf("Deleting sandbox %s resource controller", s.sandboxController)
 	if s.state.SandboxCgroupPath == "" {
-		s.Logger().Warnf("sandbox %s resource controler path is empty", s.sandboxController)
+		s.Logger().Warnf("sandbox %s resource controller path is empty", s.sandboxController)
 		return nil
 	}
 
-	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath)
+	mode := cgroups.Mode()
+
+	sandboxController, err := resCtrl.LoadResourceController(s.state.SandboxCgroupPath, resCtrl.LinuxCgroupfs)
 	if err != nil {
 		return err
 	}
 
-	resCtrlParent := sandboxController.Parent()
+	if mode == cgroups.Unified {
+		resCtrlParent = "/"
+	} else {
+		resCtrlParent = sandboxController.Parent()
+	}
 	if err := sandboxController.MoveTo(resCtrlParent); err != nil {
 		return err
 	}
@@ -2307,12 +2316,16 @@ func (s *Sandbox) resourceControllerDelete() error {
 	}
 
 	if s.state.OverheadCgroupPath != "" {
-		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath)
+		overheadController, err := resCtrl.LoadResourceController(s.state.OverheadCgroupPath, resCtrl.LinuxCgroupfs)
 		if err != nil {
 			return err
 		}
 
-		resCtrlParent := overheadController.Parent()
+		if mode == cgroups.Unified {
+			resCtrlParent = "/"
+		} else {
+			resCtrlParent = overheadController.Parent()
+		}
 		if err := s.overheadController.MoveTo(resCtrlParent); err != nil {
 			return err
 		}
