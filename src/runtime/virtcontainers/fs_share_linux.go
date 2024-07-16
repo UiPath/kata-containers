@@ -33,13 +33,15 @@ func unmountNoFollow(path string) error {
 type FilesystemShare struct {
 	sandbox *Sandbox
 	sync.Mutex
-	prepared bool
+	prepared      bool
+	sharedEntries map[string]string
 }
 
 func NewFilesystemShare(s *Sandbox) (FilesystemSharer, error) {
 	return &FilesystemShare{
-		prepared: false,
-		sandbox:  s,
+		prepared:      false,
+		sandbox:       s,
+		sharedEntries: map[string]string{},
 	}, nil
 }
 
@@ -245,6 +247,12 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 			return nil, err
 		}
 
+		if entry, ok := f.sharedEntries[m.Source]; ok {
+			return &SharedFile{
+				guestPath: entry,
+			}, nil
+		}
+
 		// Ignore the mount if this is not a regular file (excludes
 		// directory, socket, device, ...) as it cannot be handled by
 		// a simple copy. But this should not be treated as an error,
@@ -257,6 +265,8 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 		if err := f.sandbox.agent.copyFile(ctx, m.Source, guestPath); err != nil {
 			return nil, err
 		}
+
+		f.sharedEntries[m.Source] = guestPath
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(getMountPath(f.sandbox.ID()), filename)
