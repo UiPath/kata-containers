@@ -91,7 +91,8 @@ type FilesystemShare struct {
 	eventLoopStartedLock sync.Mutex
 	watcherDoneChannel   chan bool
 	sync.Mutex
-	prepared bool
+	prepared      bool
+	sharedEntries map[string]string
 }
 
 func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
@@ -117,6 +118,7 @@ func NewFilesystemShare(s *Sandbox) (*FilesystemShare, error) {
 		watcher:            watcher,
 		configVolRegex:     configVolRegex,
 		timestampDirRegex:  timestampDirRegex,
+		sharedEntries:      map[string]string{},
 	}, nil
 }
 
@@ -385,6 +387,12 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 			return nil
 		}
 
+		if entry, ok := f.sharedEntries[m.Source]; ok {
+			return &SharedFile{
+				guestPath: entry,
+			}, nil
+		}
+
 		if err := filepath.WalkDir(srcRoot, walk); err != nil {
 			c.Logger().WithField("failed-file", m.Source).Debugf("failed to copy file to sandbox: %v", err)
 			return nil, err
@@ -393,6 +401,7 @@ func (f *FilesystemShare) ShareFile(ctx context.Context, c *Container, m *Mount)
 			return nil, nil
 		}
 
+		f.sharedEntries[m.Source] = guestPath
 	} else {
 		// These mounts are created in the shared dir
 		mountDest := filepath.Join(getMountPath(f.sandbox.ID()), filename)
