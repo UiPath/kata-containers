@@ -18,6 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     name: WIP Check
     steps:
+    - run:
+        echo "TEST"
     - name: WIP Check
       if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
       uses: tim-actions/wip-check@1c2a1ca6c110026b3e2297bb2ef39e1747b5a755
