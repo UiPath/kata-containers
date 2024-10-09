@@ -53,6 +53,7 @@ use crate::linux_abi::*;
 use crate::metrics::get_metrics;
 use crate::mount::{add_storages, baremount, STORAGE_HANDLER_LIST};
 use crate::namespace::{NSTYPEIPC, NSTYPEPID, NSTYPEUTS};
+use crate::netlink::{wait_for_netlink, MacAddressMatcher};
 use crate::network::setup_guest_dns;
 use crate::pci;
 use crate::random;
@@ -936,12 +937,25 @@ impl agent_ttrpc::AgentService for AgentService {
         trace_rpc_call!(ctx, "update_interface", req);
         is_allowed!(req);
 
-        let interface = req.interface.into_option().ok_or_else(|| {
+        let mut interface = req.interface.into_option().ok_or_else(|| {
             ttrpc_error!(
                 ttrpc::Code::INVALID_ARGUMENT,
                 "empty update interface request".to_string(),
             )
         })?;
+
+        let matcher = MacAddressMatcher::new(&interface.hwAddr).map_err(|e| {
+            ttrpc_error!(
+                ttrpc::Code::INTERNAL,
+                format!("failed to create link matcher: {:?}", e)
+            )
+        })?;
+
+        interface.name = wait_for_netlink(&self.sandbox, matcher)
+            .await
+            .map_err(|e| {
+                ttrpc_error!(ttrpc::Code::INTERNAL, format!("update interface: {:?}", e))
+            })?;
 
         self.sandbox
             .lock()

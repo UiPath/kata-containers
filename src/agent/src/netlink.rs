@@ -3,18 +3,27 @@
 // SPDX-License-Identifier: Apache-2.0
 //
 
+use crate::sandbox::Sandbox;
+use crate::AGENT_CONFIG;
 use anyhow::{anyhow, Context, Result};
 use futures::{future, StreamExt, TryStreamExt};
 use ipnetwork::{IpNetwork, Ipv4Network, Ipv6Network};
 use nix::errno::Errno;
 use protobuf::RepeatedField;
 use protocols::types::{ARPNeighbor, IPAddress, IPFamily, Interface, Route};
+use rtnetlink::packet::{NetlinkPayload, RtnlMessage};
 use rtnetlink::{new_connection, packet, IpVersion};
 use std::convert::{TryFrom, TryInto};
 use std::fmt;
+use std::fmt::Debug;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::ops::Deref;
 use std::str::{self, FromStr};
+use std::sync::Arc;
+use tokio::select;
+use tokio::sync::watch::Receiver;
+use tokio::sync::Mutex;
+use tracing::instrument;
 
 /// Search criteria to use when looking for a link in `find_link`.
 pub enum LinkFilter<'a> {
@@ -22,8 +31,6 @@ pub enum LinkFilter<'a> {
     Name(&'a str),
     /// Find by link index.
     Index(u32),
-    /// Find by MAC address.
-    Address(&'a str),
 }
 
 impl fmt::Display for LinkFilter<'_> {
@@ -31,7 +38,6 @@ impl fmt::Display for LinkFilter<'_> {
         match self {
             LinkFilter::Name(name) => write!(f, "Name: {}", name),
             LinkFilter::Index(idx) => write!(f, "Index: {}", idx),
-            LinkFilter::Address(addr) => write!(f, "Address: {}", addr),
         }
     }
 }
@@ -53,6 +59,159 @@ pub struct Handle {
     handle: rtnetlink::Handle,
 }
 
+// Convenience macro to obtain the scope logger
+macro_rules! sl {
+    () => {
+        slog_scope::logger().new(o!("subsystem" => "netlink"))
+    };
+}
+
+#[derive(Debug)]
+pub struct MacAddressMatcher {
+    macaddr: [u8; 6],
+}
+
+impl MacAddressMatcher {
+    pub fn new(addr: &str) -> Result<MacAddressMatcher> {
+        Ok(MacAddressMatcher {
+            macaddr: parse_mac_address(addr)
+                .with_context(|| format!("Failed to parse MAC address: {}", addr))?,
+        })
+    }
+}
+
+impl NetlinkMatcher for MacAddressMatcher {
+    fn is_match(&self, link: &Link) -> bool {
+        use packet::link::nlas::Nla;
+
+        link.nlas.iter().any(|n| match n {
+            Nla::Address(data) => data.eq(&self.macaddr),
+            _ => false,
+        })
+    }
+}
+
+#[instrument]
+pub async fn wait_for_netlink(
+    sandbox: &Arc<Mutex<Sandbox>>,
+    matcher: impl NetlinkMatcher,
+) -> Result<String> {
+    let logprefix = format!("Waiting for {:?}", &matcher);
+
+    info!(sl!(), "{}", logprefix);
+    let mut sb = sandbox.lock().await;
+    for link in sb.netlink_map.values() {
+        if matcher.is_match(link) {
+            info!(
+                sl!(),
+                "{}: found {:?} in netlink map",
+                logprefix,
+                &link.address()
+            );
+            return Ok(link.name());
+        }
+    }
+
+    let (tx, rx) = tokio::sync::oneshot::channel::<Link>();
+    let idx = sb.netlink_watchers.len();
+    sb.netlink_watchers.push(Some((Box::new(matcher), tx)));
+    drop(sb); // unlock
+
+    info!(sl!(), "{}: waiting on channel", logprefix);
+
+    let hotplug_timeout = AGENT_CONFIG.read().await.hotplug_timeout;
+
+    let link = match tokio::time::timeout(hotplug_timeout, rx).await {
+        Ok(v) => v?,
+        Err(_) => {
+            let mut sb = sandbox.lock().await;
+            let matcher = sb.netlink_watchers[idx].take().unwrap().0;
+
+            return Err(anyhow!(
+                "Timeout after {:?} waiting for netlink {:?}",
+                hotplug_timeout,
+                &matcher
+            ));
+        }
+    };
+
+    info!(
+        sl!(),
+        "{}: found {:?} on channel",
+        logprefix,
+        &link.address()
+    );
+    Ok(link.name())
+}
+
+#[instrument]
+pub async fn watch_netlink(
+    sandbox: Arc<Mutex<Sandbox>>,
+    mut shutdown: Receiver<bool>,
+) -> Result<()> {
+    let sref = sandbox.clone();
+    let s = sref.lock().await;
+    let logger = s.logger.new(o!("subsystem" => "netlink"));
+
+    drop(s);
+
+    info!(logger, "starting netlink handler");
+
+    let (mut conn, handle, mut messages) = new_connection()?;
+
+    let addr = netlink_sys::SocketAddr::new(0, rtnetlink::constants::RTMGRP_LINK);
+    conn.socket_mut().bind(&addr)?;
+    tokio::spawn(conn);
+
+    let links = handle.link().get().execute();
+
+    links
+        .try_for_each(|m| async {
+            let link: Link = m.into();
+            let mut sb = sandbox.lock().await;
+            sb.netlink_map.insert(link.index(), link);
+
+            Ok(())
+        })
+        .await?;
+
+    loop {
+        select! {
+            _ = shutdown.changed() => {
+                info!(logger, "got shutdown request");
+                break;
+            }
+            Some((message, _)) = messages.next() => {
+                match message.payload {
+                    NetlinkPayload::InnerMessage(RtnlMessage::NewLink(m)) => {
+                        let link: Link = m.into();
+                        let mut sb = sandbox.lock().await;
+
+                        sb.netlink_map.insert(link.index(), link.clone());
+
+                        sb.netlink_watchers.iter_mut().for_each(move |watch| {
+                            if let Some((matcher, _)) = watch {
+                                if matcher.is_match(&link) {
+                                    let (_, sender) = watch.take().unwrap();
+                                    let _ = sender.send(link.clone());
+                                }
+                            }
+                        })
+                    }
+                    NetlinkPayload::InnerMessage(RtnlMessage::DelLink(m)) => {
+                        let link: Link = m.into();
+                        let mut sb = sandbox.lock().await;
+                        sb.netlink_map.remove(&link.index());
+                    }
+                    _ => {}
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
 impl Handle {
     pub(crate) fn new() -> Result<Handle> {
         let (conn, handle, _) = new_connection()?;
@@ -68,7 +227,7 @@ impl Handle {
         // target link. filter using name or family is supported, but
         // we cannot use that to find target link.
         // let's try if hardware address filter works. -_-
-        let link = self.find_link(LinkFilter::Address(&iface.hwAddr)).await?;
+        let link = self.find_link(LinkFilter::Name(&iface.name)).await?;
 
         // Bring down interface if it is UP
         if link.is_up() {
@@ -166,34 +325,11 @@ impl Handle {
         let filtered = match filter {
             LinkFilter::Name(name) => request.set_name_filter(name.to_owned()),
             LinkFilter::Index(index) => request.match_index(index),
-            _ => request, // Post filters
         };
 
         let mut stream = filtered.execute();
 
-        let next = if let LinkFilter::Address(addr) = filter {
-            use packet::link::nlas::Nla;
-
-            let mac_addr = parse_mac_address(addr)
-                .with_context(|| format!("Failed to parse MAC address: {}", addr))?;
-
-            // Hardware filter might not be supported by netlink,
-            // we may have to dump link list and then find the target link.
-            stream
-                .try_filter(|f| {
-                    let result = f.nlas.iter().any(|n| match n {
-                        Nla::Address(data) => data.eq(&mac_addr),
-                        _ => false,
-                    });
-
-                    future::ready(result)
-                })
-                .try_next()
-                .await?
-        } else {
-            stream.try_next().await?
-        };
-
+        let next = stream.try_next().await?;
         next.map(|msg| msg.into())
             .ok_or_else(|| anyhow!("Link not found ({})", filter))
     }
@@ -534,7 +670,7 @@ impl Handle {
         };
         use packet::neighbour::{NeighbourHeader, NeighbourMessage};
         use packet::nlas::neighbour::Nla;
-        use packet::{NetlinkMessage, NetlinkPayload, RtnlMessage};
+        use packet::NetlinkMessage;
         use rtnetlink::Error;
 
         const IFA_F_PERMANENT: u16 = 0x80; // See https://github.com/little-dude/netlink/blob/0185b2952505e271805902bf175fee6ea86c42b8/netlink-packet-route/src/rtnl/constants.rs#L770
@@ -636,8 +772,13 @@ fn parse_mac_address(addr: &str) -> Result<[u8; 6]> {
     Ok(arr)
 }
 
+pub trait NetlinkMatcher: Sync + Send + Debug + 'static {
+    fn is_match(&self, link: &Link) -> bool;
+}
+
 /// Wraps external type with the local one, so we can implement various extensions and type conversions.
-struct Link(packet::LinkMessage);
+#[derive(Debug, Clone)]
+pub struct Link(packet::LinkMessage);
 
 impl Link {
     /// If name.
@@ -792,21 +933,6 @@ mod tests {
 
         assert_ne!(message.header, packet::LinkHeader::default());
         assert_eq!(message.name(), "lo");
-    }
-
-    #[tokio::test]
-    async fn find_link_by_addr() {
-        let handle = Handle::new().unwrap();
-
-        let list = handle.list_links().await.unwrap();
-        let link = list.first().expect("At least one link required");
-
-        let result = handle
-            .find_link(LinkFilter::Address(&link.address()))
-            .await
-            .expect("Failed to query link by address");
-
-        assert_eq!(result.header.index, link.header.index);
     }
 
     #[tokio::test]

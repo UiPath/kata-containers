@@ -21,6 +21,7 @@ extern crate slog;
 
 use anyhow::{anyhow, Context, Result};
 use clap::{AppSettings, Parser};
+use netlink::watch_netlink;
 use nix::fcntl::OFlag;
 use nix::sys::reboot::{reboot, RebootMode};
 use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
@@ -342,6 +343,10 @@ async fn start_sandbox(
     let uevents_handler_task = tokio::spawn(watch_uevents(sandbox.clone(), shutdown.clone()));
 
     tasks.push(uevents_handler_task);
+
+    let netlink_handler_task = tokio::spawn(watch_netlink(sandbox.clone(), shutdown.clone()));
+
+    tasks.push(netlink_handler_task);
 
     let (tx, rx) = tokio::sync::oneshot::channel();
     sandbox.lock().await.sender = Some(tx);

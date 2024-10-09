@@ -6,7 +6,7 @@
 use crate::linux_abi::*;
 use crate::mount::{get_mount_fs_type, remove_mounts, TYPE_ROOTFS};
 use crate::namespace::Namespace;
-use crate::netlink::Handle;
+use crate::netlink::{Handle, Link, NetlinkMatcher};
 use crate::network::Network;
 use crate::pci;
 use crate::uevent::{Uevent, UeventMatcher};
@@ -35,6 +35,7 @@ use tracing::instrument;
 pub const ERR_INVALID_CONTAINER_ID: &str = "Invalid container id";
 
 type UeventWatcher = (Box<dyn UeventMatcher>, oneshot::Sender<Uevent>);
+type NetlinkWatcher = (Box<dyn NetlinkMatcher>, oneshot::Sender<Link>);
 
 #[derive(Debug)]
 pub struct Sandbox {
@@ -47,6 +48,8 @@ pub struct Sandbox {
     pub container_mounts: HashMap<String, Vec<String>>,
     pub uevent_map: HashMap<String, Uevent>,
     pub uevent_watchers: Vec<Option<UeventWatcher>>,
+    pub netlink_map: HashMap<u32, Link>,
+    pub netlink_watchers: Vec<Option<NetlinkWatcher>>,
     pub shared_utsns: Namespace,
     pub shared_ipcns: Namespace,
     pub sandbox_pidns: Option<Namespace>,
@@ -80,6 +83,8 @@ impl Sandbox {
             container_mounts: HashMap::new(),
             uevent_map: HashMap::new(),
             uevent_watchers: Vec::new(),
+            netlink_map: HashMap::new(),
+            netlink_watchers: Vec::new(),
             shared_utsns: Namespace::new(&logger),
             shared_ipcns: Namespace::new(&logger),
             sandbox_pidns: None,
