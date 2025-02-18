@@ -25,10 +25,12 @@ const LOG_VPORT_OPTION: &str = "agent.log_vport";
 const CONTAINER_PIPE_SIZE_OPTION: &str = "agent.container_pipe_size";
 const UNIFIED_CGROUP_HIERARCHY_OPTION: &str = "agent.unified_cgroup_hierarchy";
 const CONFIG_FILE: &str = "agent.config_file";
+const THREADS_MAX_OPTION: &str = "agent.threads-max";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
+const DEFAULT_THREADS_MAX: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 
 // Environment variables used for development and testing
@@ -51,6 +53,12 @@ const ERR_INVALID_CONTAINER_PIPE_SIZE: &str = "invalid container pipe size param
 const ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM: &str = "unable to parse container pipe size";
 const ERR_INVALID_CONTAINER_PIPE_SIZE_KEY: &str = "invalid container pipe size key name";
 const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should not be negative";
+
+const ERR_INVALID_THREADS_MAX: &str = "invalid threads max parameter";
+const ERR_INVALID_THREADS_MAX_PARAM: &str = "unable to parse threads max";
+const ERR_INVALID_THREADS_MAX_KEY: &str = "invalid threads max key name";
+const ERR_INVALID_THREADS_MAX_NEGATIVE: &str = "threads max should not be negative";
+
 
 #[derive(Debug, Default, Deserialize)]
 pub struct EndpointsConfig {
@@ -77,6 +85,7 @@ pub struct AgentConfig {
     pub tracing: bool,
     pub endpoints: AgentEndpoints,
     pub supports_seccomp: bool,
+    pub threads_max: i32,
 }
 
 #[derive(Debug, Deserialize)]
@@ -92,6 +101,7 @@ pub struct AgentConfigBuilder {
     pub unified_cgroup_hierarchy: Option<bool>,
     pub tracing: Option<bool>,
     pub endpoints: Option<EndpointsConfig>,
+    pub threads_max: Option<i32>,
 }
 
 macro_rules! config_override {
@@ -153,6 +163,7 @@ impl Default for AgentConfig {
             tracing: false,
             endpoints: Default::default(),
             supports_seccomp: rpc::have_seccomp(),
+            threads_max: DEFAULT_THREADS_MAX,
         }
     }
 }
@@ -181,6 +192,7 @@ impl FromStr for AgentConfig {
         config_override!(agent_config_builder, agent_config, server_addr);
         config_override!(agent_config_builder, agent_config, unified_cgroup_hierarchy);
         config_override!(agent_config_builder, agent_config, tracing);
+        config_override!(agent_config_builder, agent_config, threads_max);
 
         // Populate the allowed endpoints hash set, if we got any from the config file.
         if let Some(endpoints) = agent_config_builder.endpoints {
@@ -277,6 +289,12 @@ impl AgentConfig {
                 UNIFIED_CGROUP_HIERARCHY_OPTION,
                 config.unified_cgroup_hierarchy,
                 get_bool_value
+            );
+            parse_cmdline_param!(
+                param,
+                THREADS_MAX_OPTION,
+                config.threads_max,
+                get_threads_max
             );
         }
 
@@ -427,6 +445,26 @@ fn get_container_pipe_size(param: &str) -> Result<i32> {
         .with_context(|| ERR_INVALID_CONTAINER_PIPE_SIZE_PARAM)?;
 
     ensure!(value >= 0, ERR_INVALID_CONTAINER_PIPE_NEGATIVE);
+
+    Ok(value)
+}
+
+#[instrument]
+fn get_threads_max(param: &str) -> Result<i32> {
+    let fields: Vec<&str> = param.split('=').collect();
+    ensure!(fields.len() == 2, ERR_INVALID_THREADS_MAX);
+
+    let key = fields[0];
+    ensure!(
+        key == THREADS_MAX_OPTION,
+        ERR_INVALID_THREADS_MAX_KEY
+    );
+
+    let value = fields[1]
+        .parse::<i32>()
+        .with_context(|| ERR_INVALID_THREADS_MAX_PARAM)?;
+
+    ensure!(value >= 0, ERR_INVALID_THREADS_MAX_NEGATIVE);
 
     Ok(value)
 }
