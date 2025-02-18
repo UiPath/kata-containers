@@ -29,8 +29,8 @@ use nix::sys::socket::{self, AddressFamily, SockFlag, SockType, VsockAddr};
 use nix::unistd::{self, dup, sync, Pid};
 use std::env;
 use std::ffi::OsStr;
-use std::fs::{self, File};
-use std::io::ErrorKind;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Write, ErrorKind};
 use std::os::unix::fs::{self as unixfs, FileTypeExt};
 use std::os::unix::io::AsRawFd;
 use std::path::Path;
@@ -182,6 +182,32 @@ async fn create_logger_task(rfd: RawFd, vsock_port: u32, shutdown: Receiver<bool
     Ok(())
 }
 
+fn set_threads_max(logger: &Logger, threads_max: i32) -> Result<()> {
+    let path = Path::new("/proc/sys/kernel/threads-max");
+
+    if threads_max == 0 {
+        return Ok(())
+    }
+
+    let threads_str = format!("{}", threads_max);
+    info!(logger, "write {} max threads to {:?}", &threads_str, &path);
+
+    let mut file = OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .context(format!("open threads-max config {:?}", &path))?;
+
+    file.write_all(threads_str.as_bytes())
+        .context(format!("write threads-max failed: {:?}", &path))?;
+
+    let soft_limit: u64 = threads_max as u64 / 2;
+    let hard_limit: u64 = threads_max as u64 / 2;
+    
+    nix::sys::resource::setrlimit(nix::sys::resource::Resource::RLIMIT_NPROC, soft_limit, hard_limit)?;
+
+    Ok(())
+}
+
 async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::error::Error>> {
     env::set_var("RUST_BACKTRACE", "full");
 
@@ -237,6 +263,11 @@ async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::erro
         logging::create_logger(NAME, "agent", config.log_level, writer);
 
     announce(&logger, config);
+
+    set_threads_max(&logger, AGENT_CONFIG.threads_max).map_err(|e| {
+        error!(logger, "failed set threads max: {}", e);
+        e
+    })?;
 
     // This variable is required as it enables the global (and crucially static) logger,
     // which is required to satisfy the the lifetime constraints of the auto-generated gRPC code.

@@ -61,6 +61,7 @@ const MEM_AGENT_COMPACT_SEC_MAX: &str = "agent.mem_agent_compact_sec_max";
 const MEM_AGENT_COMPACT_ORDER: &str = "agent.mem_agent_compact_order";
 const MEM_AGENT_COMPACT_THRESHOLD: &str = "agent.mem_agent_compact_threshold";
 const MEM_AGENT_COMPACT_FORCE_TIMES: &str = "agent.mem_agent_compact_force_times";
+const THREADS_MAX_OPTION: &str = "agent.threads-max";
 
 const DEFAULT_LOG_LEVEL: slog::Level = slog::Level::Info;
 const DEFAULT_HOTPLUG_TIMEOUT: time::Duration = time::Duration::from_secs(3);
@@ -69,6 +70,7 @@ const DEFAULT_IMAGE_PULL_TIMEOUT: time::Duration = time::Duration::from_secs(120
 const DEFAULT_CDI_TIMEOUT: time::Duration = time::Duration::from_secs(100);
 const DEFAULT_LAUNCH_PROCESS_TIMEOUT: time::Duration = time::Duration::from_secs(6);
 const DEFAULT_CONTAINER_PIPE_SIZE: i32 = 0;
+const DEFAULT_THREADS_MAX: i32 = 0;
 const VSOCK_ADDR: &str = "vsock://-1";
 
 // Environment variables used for development and testing
@@ -97,6 +99,11 @@ const ERR_INVALID_CONTAINER_PIPE_NEGATIVE: &str = "container pipe size should no
 
 const ERR_INVALID_GUEST_COMPONENTS_REST_API_VALUE: &str = "invalid guest components rest api feature given. Valid values are `all`, `attestation`, `resource`";
 const ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE: &str = "invalid guest components process param given. Valid values are `attestation-agent`, `confidential-data-hub`, `api-server-rest`, or `none`";
+
+const ERR_INVALID_THREADS_MAX: &str = "invalid threads max parameter";
+const ERR_INVALID_THREADS_MAX_PARAM: &str = "unable to parse threads max";
+const ERR_INVALID_THREADS_MAX_KEY: &str = "invalid threads max key name";
+const ERR_INVALID_THREADS_MAX_NEGATIVE: &str = "threads max should not be negative";
 
 #[derive(Clone, Copy, Debug, Default, Display, Deserialize, EnumString, PartialEq)]
 // Features seem to typically be in kebab-case format, but we only have single words at the moment
@@ -149,6 +156,7 @@ pub struct AgentConfig {
     #[cfg(feature = "agent-policy")]
     pub policy_file: String,
     pub mem_agent: Option<MemAgentConfig>,
+    pub threads_max: i32,
 }
 
 #[derive(Debug, Default, PartialEq)]
@@ -197,6 +205,7 @@ pub struct AgentConfigBuilder {
     pub mem_agent_compact_order: Option<u8>,
     pub mem_agent_compact_threshold: Option<u64>,
     pub mem_agent_compact_force_times: Option<u64>,
+    pub threads_max: Option<i32>,
 }
 
 macro_rules! config_override {
@@ -278,6 +287,7 @@ impl Default for AgentConfig {
             #[cfg(feature = "agent-policy")]
             policy_file: String::from(""),
             mem_agent: None,
+            threads_max: DEFAULT_THREADS_MAX,
         }
     }
 }
@@ -320,6 +330,7 @@ impl FromStr for AgentConfig {
         );
         config_override!(agent_config_builder, agent_config, guest_components_procs);
         config_override!(agent_config_builder, agent_config, secure_storage_integrity);
+        config_override!(agent_config_builder, agent_config, threads_max);
 
         #[cfg(feature = "agent-policy")]
         config_override!(agent_config_builder, agent_config, policy_file);
@@ -555,6 +566,12 @@ impl AgentConfig {
                 SECURE_STORAGE_INTEGRITY_OPTION,
                 config.secure_storage_integrity,
                 get_bool_value
+            );
+            parse_cmdline_param!(
+                param,
+                THREADS_MAX_OPTION,
+                config.threads_max,
+                get_threads_max
             );
 
             parse_cmdline_param!(param, MEM_AGENT_ENABLE, mem_agent_enable, get_bool_value);
@@ -855,6 +872,26 @@ fn get_guest_components_procs_value(param: &str) -> Result<GuestComponentsProcs>
     let value = fields[1..].join("=");
     GuestComponentsProcs::from_str(&value)
         .map_err(|_| anyhow!(ERR_INVALID_GUEST_COMPONENTS_PROCS_VALUE))
+}
+
+#[instrument]
+fn get_threads_max(param: &str) -> Result<i32> {
+    let fields: Vec<&str> = param.split('=').collect();
+    ensure!(fields.len() == 2, ERR_INVALID_THREADS_MAX);
+
+    let key = fields[0];
+    ensure!(
+        key == THREADS_MAX_OPTION,
+        ERR_INVALID_THREADS_MAX_KEY
+    );
+
+    let value = fields[1]
+        .parse::<i32>()
+        .with_context(|| ERR_INVALID_THREADS_MAX_PARAM)?;
+
+    ensure!(value >= 0, ERR_INVALID_THREADS_MAX_NEGATIVE);
+
+    Ok(value)
 }
 
 #[cfg(test)]
