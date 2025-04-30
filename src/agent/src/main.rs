@@ -169,6 +169,18 @@ fn set_threads_max(logger: &Logger, threads_max: i32) -> Result<()> {
     Ok(())
 }
 
+fn bump_nofile_to_nropen() -> Result<()> {
+    let limit: i32 = fs::read_to_string("/proc/sys/fs/nr_open")
+            .unwrap()
+            .trim()
+            .parse::<i32>()
+            .unwrap_or(1024 * 1024);
+
+    nix::sys::resource::setrlimit(nix::sys::resource::Resource::RLIMIT_NOFILE, limit as u64, limit as u64)?;
+
+    Ok(())
+}
+
 async fn real_main(init_mode: bool) -> std::result::Result<(), Box<dyn std::error::Error>> {
     env::set_var("RUST_BACKTRACE", "full");
 
@@ -419,6 +431,8 @@ fn init_agent_as_init(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result
         std::fs::read_to_string("/etc/hostname").unwrap_or_else(|_| String::from("localhost"));
     let contents_array: Vec<&str> = contents.split(' ').collect();
     let hostname = contents_array[0].trim();
+
+    bump_nofile_to_nropen()?;
 
     if unistd::sethostname(OsStr::new(hostname)).is_err() {
         warn!(logger, "failed to set hostname");
