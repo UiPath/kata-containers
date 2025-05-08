@@ -23,7 +23,9 @@ RUN apt-get update && \
     git \
     make \
     makedev \
-    multistrap \
+    mmdebstrap \
+    musl \
+    musl-dev \
     musl-tools \
     protobuf-compiler
 # aarch64 requires this name -- link for all
