@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-FROM ubuntu:20.04
+FROM ubuntu:22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV INSTALL_IN_GOPATH=false
 
@@ -15,12 +15,10 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         curl \
-        sudo && \
+        sudo \
+        docker.io && \
     apt-get clean && rm -rf /var/lib/apt/lists/ && \
-    install_yq.sh && \
-    curl -fsSL https://get.docker.com -o get-docker.sh && \
-    if uname -m | grep -Eq 's390x|ppc64le'; then export VERSION="v20.10"; fi && \
-    sh get-docker.sh
+    install_yq.sh
 
 ARG IMG_USER=kata-builder
 ARG UID=1000
