@@ -117,9 +117,9 @@ if command -v go; then
 fi
 
 info "Download go version ${go_version}"
-kernel_name=$(uname -s)
-curl -OL "https://storage.googleapis.com/golang/go${go_version}.${kernel_name,,}-${goarch}.tar.gz"
+kernel_name=$(uname -s | tr '[:upper:]' '[:lower:]')
+curl -fsSOL "https://go.dev/dl/go${go_version}.${kernel_name}-${goarch}.tar.gz"
 info "Install go"
 mkdir -p "${install_dest}"
-sudo tar -C "${install_dest}" -xzf "go${go_version}.${kernel_name,,}-${goarch}.tar.gz"
+sudo tar -C "${install_dest}" -xzf "go${go_version}.${kernel_name}-${goarch}.tar.gz"
 popd
