@@ -2269,7 +2269,7 @@ dependencies = [
 [[package]]
 name = "ttrpc"
 version = "0.6.1"
-source = "git+https://github.com/UiPath/ttrpc-rust.git?branch=flush-writes-on-shutdown#222da26b2d2ee52a268511874dc7ea3960f0fb01"
+source = "git+https://github.com/UiPath/ttrpc-rust.git?branch=flush-writes-on-shutdown#49ceac526bb0f2eded150ce64f4d21166f928778"
 dependencies = [
  "async-trait",
  "byteorder",

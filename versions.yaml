@@ -72,10 +72,10 @@ assets:
 
     cloud_hypervisor:
       description: "Cloud Hypervisor is an open source Virtual Machine Monitor"
-      url: "https://github.com/cloud-hypervisor/cloud-hypervisor"
+      url: "https://github.com/UiPath/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v29.0"
+      version: "v50.0"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -130,7 +130,7 @@ assets:
         version: "latest"
       x86_64:
         name: &default-image-name "ubuntu"
-        version: "latest"
+        version: "focal"
     meta:
       image-type: *default-image-name
 
@@ -157,8 +157,8 @@ assets:
 
   kernel:
     description: "Linux kernel optimised for virtual machines"
-    url: "https://cdn.kernel.org/pub/linux/kernel/v5.x/"
-    version: "v5.19.2"
+    url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
+    version: "v6.10.14"
     tdx:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/kata-containers/linux/archive/refs/tags"
@@ -290,13 +290,13 @@ externals:
   virtiofsd:
     description: "vhost-user virtio-fs device backend written in Rust"
     url: "https://gitlab.com/virtio-fs/virtiofsd"
-    version: "v1.3.0"
+    version: "v1.13.2"
     meta:
       # From https://gitlab.com/virtio-fs/virtiofsd/-/releases/v1.3.0,
       # this is the link labelled virtiofsd-v1.3.0.zip
       #
       # yamllint disable-line rule:line-length
-      binary: "https://gitlab.com/virtio-fs/virtiofsd/uploads/9a4f2261fcb1701f1e709694b5c5d980/virtiofsd-v1.3.0.zip"
+      binary: "https://gitlab.com/-/project/21523468/uploads/0298165d4cd2c73ca444a8c0f6a9ecc7/virtiofsd-v1.13.2.zip"
 
 languages:
   description: |

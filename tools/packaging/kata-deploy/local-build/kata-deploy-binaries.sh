@@ -141,9 +141,9 @@ install_firecracker() {
 
 # Install static cloud-hypervisor asset
 install_clh() {
-	if [[ "${ARCH}" == "x86_64" ]]; then
-		export features="tdx"
-	fi
+	# if [[ "${ARCH}" == "x86_64" ]]; then
+	# 	export features="tdx"
+	# fi
 
 	info "build static cloud-hypervisor"
 	"${clh_builder}"
