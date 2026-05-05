@@ -72,7 +72,7 @@ const (
 	// Values are mandatory by http API
 	// Values based on:
 	clhTimeout                     = 10
-	clhAPITimeout                  = 1
+	clhAPITimeout                  = 3
 	clhAPITimeoutConfidentialGuest = 10
 	// Timeout for hot-plug - hotplug devices can take more time, than usual API calls
 	// Use longer time timeout for it.
@@ -931,8 +931,8 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 
-	queues := int32(clh.config.NumVCPUs)
-	queueSize := int32(1024)
+	queues := int32(1)
+	queueSize := int32(32)
 	clhDisk.NumQueues = &queues
 	clhDisk.QueueSize = &queueSize
 
