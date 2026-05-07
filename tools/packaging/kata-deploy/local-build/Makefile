@@ -23,8 +23,6 @@ all-parallel: $(MK_DIR)/dockerbuild/install_yq.sh
 
 all: serial-targets \
 	firecracker-tarball \
-	kernel-tarball \
-	kernel-dragonball-experimental-tarball \
 	nydus-tarball \
 	qemu-tarball \
 	shim-v2-tarball \
@@ -34,6 +32,8 @@ serial-targets:
 	${MAKE} -f $(MK_PATH) -j 1 V= \
 	rootfs-image-tarball \
 	rootfs-initrd-tarball \
+	kernel-tarball \
+	kernel-dragonball-experimental-tarball \
 	cloud-hypervisor-tarball
 
 %-tarball-build: $(MK_DIR)/dockerbuild/install_yq.sh
