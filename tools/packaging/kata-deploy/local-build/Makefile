@@ -14,10 +14,6 @@ ARCH := $(shell uname -m)
 ifeq ($(ARCH), x86_64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
-	kernel-debug-tarball \
-	kernel-dragonball-experimental-tarball \
-	kernel-nvidia-gpu-tarball \
-	kernel-tarball \
 	nydus-tarball \
 	ovmf-sev-tarball \
 	ovmf-tdx-tarball \
@@ -42,13 +38,15 @@ BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-nvidia-gpu-extension-tarball \
 	rootfs-initrd-confidential-tarball \
 	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball
+	cloud-hypervisor-tarball \
+	kernel-debug-tarball \
+	kernel-dragonball-experimental-tarball \
+	kernel-nvidia-gpu-tarball \
+	kernel-tarball
 else ifeq ($(ARCH), s390x)
 BASE_TARBALLS = serial-targets \
 	boot-image-se-tarball \
 	boot-image-se-runtime-rs-tarball \
-	kernel-debug-tarball \
-	kernel-tarball \
 	qemu-tarball \
 	shim-v2-go-tarball \
 	shim-v2-rust-tarball \
@@ -57,13 +55,12 @@ BASE_SERIAL_TARBALLS = rootfs-image-tarball \
 	rootfs-image-confidential-tarball \
 	rootfs-image-coco-extension-tarball \
 	rootfs-initrd-confidential-tarball \
-	rootfs-initrd-tarball
+	rootfs-initrd-tarball \
+	kernel-debug-tarball \
+	kernel-tarball
 else ifeq ($(ARCH), aarch64)
 BASE_TARBALLS = serial-targets \
 	firecracker-tarball \
-	kernel-debug-tarball \
-	kernel-dragonball-experimental-tarball \
-	kernel-tarball \
 	nydus-tarball \
 	ovmf-tarball \
 	qemu-no-shared-fs-tarball \
@@ -80,7 +77,10 @@ BASE_SERIAL_TARBALLS = openvmm-tarball \
 	rootfs-image-nvidia-tarball \
 	rootfs-image-nvidia-gpu-extension-tarball \
 	rootfs-initrd-tarball \
-	cloud-hypervisor-tarball
+	cloud-hypervisor-tarball \
+	kernel-debug-tarball \
+	kernel-dragonball-experimental-tarball \
+	kernel-tarball
 else ifeq ($(ARCH), ppc64le)
 BASE_TARBALLS = serial-targets \
 	kernel-tarball \
