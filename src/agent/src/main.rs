@@ -386,9 +386,14 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
         .build()?;
 
     let init_mode = unistd::getpid() == Pid::from_raw(1);
+
     let result = rt.block_on(real_main(init_mode));
 
     if init_mode {
+        if let Err(e) = &result {
+            eprintln!("{} failed: {:#?}", NAME, e);
+        }
+
         sync();
         let _ = reboot(RebootMode::RB_POWER_OFF);
     }
