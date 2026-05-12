@@ -979,7 +979,6 @@ func (k *kataAgent) constrainGRPCSpec(grpcSpec *grpc.Spec, passSeccomp bool, dis
 	var tmpNamespaces []grpc.LinuxNamespace
 	for _, ns := range grpcSpec.Linux.Namespaces {
 		switch ns.Type {
-		case string(specs.CgroupNamespace):
 		case string(specs.NetworkNamespace):
 		default:
 			ns.Path = ""

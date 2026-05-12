@@ -1004,9 +1004,10 @@ pub fn cgroups_mount(logger: &Logger, unified_cgroup_hierarchy: bool) -> Result<
         mount_to_rootfs(&logger, cg)?;
     }
 
-    // Enable memory hierarchical account.
-    // For more information see https://www.kernel.org/doc/Documentation/cgroup-v1/memory.txt
-    online_device("/sys/fs/cgroup/memory/memory.use_hierarchy")?;
+    if !unified_cgroup_hierarchy {
+        return online_device("/sys/fs/cgroup/memory/memory.use_hierarchy");
+    }
+
     Ok(())
 }
 
