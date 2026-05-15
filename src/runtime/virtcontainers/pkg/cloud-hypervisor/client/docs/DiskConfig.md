@@ -4,7 +4,7 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Path** | **string** |  | 
+**Path** | Pointer to **string** |  | [optional] 
 **Readonly** | Pointer to **bool** |  | [optional] [default to false]
 **Direct** | Pointer to **bool** |  | [optional] [default to false]
 **Iommu** | Pointer to **bool** |  | [optional] [default to false]
@@ -15,12 +15,18 @@ Name | Type | Description | Notes
 **RateLimiterConfig** | Pointer to [**RateLimiterConfig**](RateLimiterConfig.md) |  | [optional] 
 **PciSegment** | Pointer to **int32** |  | [optional] 
 **Id** | Pointer to **string** |  | [optional] 
+**Serial** | Pointer to **string** |  | [optional] 
+**RateLimitGroup** | Pointer to **string** |  | [optional] 
+**QueueAffinity** | Pointer to [**[]VirtQueueAffinity**](VirtQueueAffinity.md) |  | [optional] 
+**BackingFiles** | Pointer to **bool** |  | [optional] [default to false]
+**Sparse** | Pointer to **bool** |  | [optional] [default to true]
+**ImageType** | Pointer to **string** |  | [optional] 
 
 ## Methods
 
 ### NewDiskConfig
 
-`func NewDiskConfig(path string, ) *DiskConfig`
+`func NewDiskConfig() *DiskConfig`
 
 NewDiskConfig instantiates a new DiskConfig object
 This constructor will assign default values to properties that have it defined,
@@ -54,6 +60,11 @@ and a boolean to check if the value has been set.
 
 SetPath sets Path field to given value.
 
+### HasPath
+
+`func (o *DiskConfig) HasPath() bool`
+
+HasPath returns a boolean if a field has been set.
 
 ### GetReadonly
 
@@ -304,6 +315,156 @@ SetId sets Id field to given value.
 `func (o *DiskConfig) HasId() bool`
 
 HasId returns a boolean if a field has been set.
+
+### GetSerial
+
+`func (o *DiskConfig) GetSerial() string`
+
+GetSerial returns the Serial field if non-nil, zero value otherwise.
+
+### GetSerialOk
+
+`func (o *DiskConfig) GetSerialOk() (*string, bool)`
+
+GetSerialOk returns a tuple with the Serial field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSerial
+
+`func (o *DiskConfig) SetSerial(v string)`
+
+SetSerial sets Serial field to given value.
+
+### HasSerial
+
+`func (o *DiskConfig) HasSerial() bool`
+
+HasSerial returns a boolean if a field has been set.
+
+### GetRateLimitGroup
+
+`func (o *DiskConfig) GetRateLimitGroup() string`
+
+GetRateLimitGroup returns the RateLimitGroup field if non-nil, zero value otherwise.
+
+### GetRateLimitGroupOk
+
+`func (o *DiskConfig) GetRateLimitGroupOk() (*string, bool)`
+
+GetRateLimitGroupOk returns a tuple with the RateLimitGroup field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetRateLimitGroup
+
+`func (o *DiskConfig) SetRateLimitGroup(v string)`
+
+SetRateLimitGroup sets RateLimitGroup field to given value.
+
+### HasRateLimitGroup
+
+`func (o *DiskConfig) HasRateLimitGroup() bool`
+
+HasRateLimitGroup returns a boolean if a field has been set.
+
+### GetQueueAffinity
+
+`func (o *DiskConfig) GetQueueAffinity() []VirtQueueAffinity`
+
+GetQueueAffinity returns the QueueAffinity field if non-nil, zero value otherwise.
+
+### GetQueueAffinityOk
+
+`func (o *DiskConfig) GetQueueAffinityOk() (*[]VirtQueueAffinity, bool)`
+
+GetQueueAffinityOk returns a tuple with the QueueAffinity field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetQueueAffinity
+
+`func (o *DiskConfig) SetQueueAffinity(v []VirtQueueAffinity)`
+
+SetQueueAffinity sets QueueAffinity field to given value.
+
+### HasQueueAffinity
+
+`func (o *DiskConfig) HasQueueAffinity() bool`
+
+HasQueueAffinity returns a boolean if a field has been set.
+
+### GetBackingFiles
+
+`func (o *DiskConfig) GetBackingFiles() bool`
+
+GetBackingFiles returns the BackingFiles field if non-nil, zero value otherwise.
+
+### GetBackingFilesOk
+
+`func (o *DiskConfig) GetBackingFilesOk() (*bool, bool)`
+
+GetBackingFilesOk returns a tuple with the BackingFiles field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetBackingFiles
+
+`func (o *DiskConfig) SetBackingFiles(v bool)`
+
+SetBackingFiles sets BackingFiles field to given value.
+
+### HasBackingFiles
+
+`func (o *DiskConfig) HasBackingFiles() bool`
+
+HasBackingFiles returns a boolean if a field has been set.
+
+### GetSparse
+
+`func (o *DiskConfig) GetSparse() bool`
+
+GetSparse returns the Sparse field if non-nil, zero value otherwise.
+
+### GetSparseOk
+
+`func (o *DiskConfig) GetSparseOk() (*bool, bool)`
+
+GetSparseOk returns a tuple with the Sparse field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetSparse
+
+`func (o *DiskConfig) SetSparse(v bool)`
+
+SetSparse sets Sparse field to given value.
+
+### HasSparse
+
+`func (o *DiskConfig) HasSparse() bool`
+
+HasSparse returns a boolean if a field has been set.
+
+### GetImageType
+
+`func (o *DiskConfig) GetImageType() string`
+
+GetImageType returns the ImageType field if non-nil, zero value otherwise.
+
+### GetImageTypeOk
+
+`func (o *DiskConfig) GetImageTypeOk() (*string, bool)`
+
+GetImageTypeOk returns a tuple with the ImageType field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetImageType
+
+`func (o *DiskConfig) SetImageType(v string)`
+
+SetImageType sets ImageType field to given value.
+
+### HasImageType
+
+`func (o *DiskConfig) HasImageType() bool`
+
+HasImageType returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

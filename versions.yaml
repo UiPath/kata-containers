@@ -75,7 +75,7 @@ assets:
       url: "https://github.com/UiPath/cloud-hypervisor"
       uscan-url: >-
         https://github.com/cloud-hypervisor/cloud-hypervisor/tags.*/v?(\d\S+)\.tar\.gz
-      version: "v50.0"
+      version: "v51.2"
 
     firecracker:
       description: "Firecracker micro-VMM"
@@ -158,7 +158,7 @@ assets:
   kernel:
     description: "Linux kernel optimised for virtual machines"
     url: "https://cdn.kernel.org/pub/linux/kernel/v6.x/"
-    version: "v6.10.14"
+    version: "v6.12.90"
     tdx:
       description: "Linux kernel that supports TDX"
       url: "https://github.com/kata-containers/linux/archive/refs/tags"

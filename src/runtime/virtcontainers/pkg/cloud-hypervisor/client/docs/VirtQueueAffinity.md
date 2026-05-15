@@ -1,67 +1,67 @@
-# CpuAffinity
+# VirtQueueAffinity
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Vcpu** | **int32** |  | 
+**QueueIndex** | **int32** |  | 
 **HostCpus** | **[]int32** |  | 
 
 ## Methods
 
-### NewCpuAffinity
+### NewVirtQueueAffinity
 
-`func NewCpuAffinity(vcpu int32, hostCpus []int32, ) *CpuAffinity`
+`func NewVirtQueueAffinity(queueIndex int32, hostCpus []int32, ) *VirtQueueAffinity`
 
-NewCpuAffinity instantiates a new CpuAffinity object
+NewVirtQueueAffinity instantiates a new VirtQueueAffinity object
 This constructor will assign default values to properties that have it defined,
 and makes sure properties required by API are set, but the set of arguments
 will change when the set of required properties is changed
 
-### NewCpuAffinityWithDefaults
+### NewVirtQueueAffinityWithDefaults
 
-`func NewCpuAffinityWithDefaults() *CpuAffinity`
+`func NewVirtQueueAffinityWithDefaults() *VirtQueueAffinity`
 
-NewCpuAffinityWithDefaults instantiates a new CpuAffinity object
+NewVirtQueueAffinityWithDefaults instantiates a new VirtQueueAffinity object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
 
-### GetVcpu
+### GetQueueIndex
 
-`func (o *CpuAffinity) GetVcpu() int32`
+`func (o *VirtQueueAffinity) GetQueueIndex() int32`
 
-GetVcpu returns the Vcpu field if non-nil, zero value otherwise.
+GetQueueIndex returns the QueueIndex field if non-nil, zero value otherwise.
 
-### GetVcpuOk
+### GetQueueIndexOk
 
-`func (o *CpuAffinity) GetVcpuOk() (*int32, bool)`
+`func (o *VirtQueueAffinity) GetQueueIndexOk() (*int32, bool)`
 
-GetVcpuOk returns a tuple with the Vcpu field if it's non-nil, zero value otherwise
+GetQueueIndexOk returns a tuple with the QueueIndex field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetVcpu
+### SetQueueIndex
 
-`func (o *CpuAffinity) SetVcpu(v int32)`
+`func (o *VirtQueueAffinity) SetQueueIndex(v int32)`
 
-SetVcpu sets Vcpu field to given value.
+SetQueueIndex sets QueueIndex field to given value.
 
 
 ### GetHostCpus
 
-`func (o *CpuAffinity) GetHostCpus() []int32`
+`func (o *VirtQueueAffinity) GetHostCpus() []int32`
 
 GetHostCpus returns the HostCpus field if non-nil, zero value otherwise.
 
 ### GetHostCpusOk
 
-`func (o *CpuAffinity) GetHostCpusOk() (*[]int32, bool)`
+`func (o *VirtQueueAffinity) GetHostCpusOk() (*[]int32, bool)`
 
 GetHostCpusOk returns a tuple with the HostCpus field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetHostCpus
 
-`func (o *CpuAffinity) SetHostCpus(v []int32)`
+`func (o *VirtQueueAffinity) SetHostCpus(v []int32)`
 
 SetHostCpus sets HostCpus field to given value.
 

@@ -18,6 +18,7 @@ Method | HTTP request | Description
 [**VmAddFsPut**](DefaultApi.md#VmAddFsPut) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
 [**VmAddNetPut**](DefaultApi.md#VmAddNetPut) | **Put** /vm.add-net | Add a new network device to the VM
 [**VmAddPmemPut**](DefaultApi.md#VmAddPmemPut) | **Put** /vm.add-pmem | Add a new pmem device to the VM
+[**VmAddUserDevicePut**](DefaultApi.md#VmAddUserDevicePut) | **Put** /vm.add-user-device | Add a new userspace device to the VM
 [**VmAddVdpaPut**](DefaultApi.md#VmAddVdpaPut) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 [**VmAddVsockPut**](DefaultApi.md#VmAddVsockPut) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 [**VmCoredumpPut**](DefaultApi.md#VmCoredumpPut) | **Put** /vm.coredump | Takes a VM coredump.
@@ -25,11 +26,13 @@ Method | HTTP request | Description
 [**VmInfoGet**](DefaultApi.md#VmInfoGet) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 [**VmReceiveMigrationPut**](DefaultApi.md#VmReceiveMigrationPut) | **Put** /vm.receive-migration | Receive a VM migration from URL
 [**VmRemoveDevicePut**](DefaultApi.md#VmRemoveDevicePut) | **Put** /vm.remove-device | Remove a device from the VM
+[**VmResizeDiskPut**](DefaultApi.md#VmResizeDiskPut) | **Put** /vm.resize-disk | Resize a disk
 [**VmResizePut**](DefaultApi.md#VmResizePut) | **Put** /vm.resize | Resize the VM
 [**VmResizeZonePut**](DefaultApi.md#VmResizeZonePut) | **Put** /vm.resize-zone | Resize a memory zone
 [**VmRestorePut**](DefaultApi.md#VmRestorePut) | **Put** /vm.restore | Restore a VM from a snapshot.
 [**VmSendMigrationPut**](DefaultApi.md#VmSendMigrationPut) | **Put** /vm.send-migration | Send a VM migration to URL
 [**VmSnapshotPut**](DefaultApi.md#VmSnapshotPut) | **Put** /vm.snapshot | Returns a VM snapshot.
+[**VmmNmiPut**](DefaultApi.md#VmmNmiPut) | **Put** /vmm.nmi | Inject an NMI.
 [**VmmPingGet**](DefaultApi.md#VmmPingGet) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
@@ -635,7 +638,7 @@ import (
 )
 
 func main() {
-    diskConfig := *openapiclient.NewDiskConfig("Path_example") // DiskConfig | The details of the new disk
+    diskConfig := *openapiclient.NewDiskConfig() // DiskConfig | The details of the new disk
 
     configuration := openapiclient.NewConfiguration()
     api_client := openapiclient.NewAPIClient(configuration)
@@ -853,6 +856,70 @@ Other parameters are passed through a pointer to a apiVmAddPmemPutRequest struct
 Name | Type | Description  | Notes
 ------------- | ------------- | ------------- | -------------
  **pmemConfig** | [**PmemConfig**](PmemConfig.md) | The details of the new pmem device | 
+
+### Return type
+
+[**PciDeviceInfo**](PciDeviceInfo.md)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmAddUserDevicePut
+
+> PciDeviceInfo VmAddUserDevicePut(ctx).VmAddUserDevice(vmAddUserDevice).Execute()
+
+Add a new userspace device to the VM
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmAddUserDevice := *openapiclient.NewVmAddUserDevice("Socket_example") // VmAddUserDevice | The path of the new device
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmAddUserDevicePut(context.Background()).VmAddUserDevice(vmAddUserDevice).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmAddUserDevicePut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+    // response from `VmAddUserDevicePut`: PciDeviceInfo
+    fmt.Fprintf(os.Stdout, "Response from `DefaultApi.VmAddUserDevicePut`: %v\n", resp)
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmAddUserDevicePutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **vmAddUserDevice** | [**VmAddUserDevice**](VmAddUserDevice.md) | The path of the new device | 
 
 ### Return type
 
@@ -1304,6 +1371,68 @@ No authorization required
 [[Back to README]](../README.md)
 
 
+## VmResizeDiskPut
+
+> VmResizeDiskPut(ctx).VmResizeDisk(vmResizeDisk).Execute()
+
+Resize a disk
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+    vmResizeDisk := *openapiclient.NewVmResizeDisk() // VmResizeDisk | Resizes a disk attached to the VM
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmResizeDiskPut(context.Background()).VmResizeDisk(vmResizeDisk).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmResizeDiskPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmResizeDiskPutRequest struct via the builder pattern
+
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **vmResizeDisk** | [**VmResizeDisk**](VmResizeDisk.md) | Resizes a disk attached to the VM | 
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: application/json
+- **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
 ## VmResizePut
 
 > VmResizePut(ctx).VmResize(vmResize).Execute()
@@ -1607,6 +1736,63 @@ No authorization required
 ### HTTP request headers
 
 - **Content-Type**: application/json
+- **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)
+[[Back to Model list]](../README.md#documentation-for-models)
+[[Back to README]](../README.md)
+
+
+## VmmNmiPut
+
+> VmmNmiPut(ctx).Execute()
+
+Inject an NMI.
+
+### Example
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+    openapiclient "./openapi"
+)
+
+func main() {
+
+    configuration := openapiclient.NewConfiguration()
+    api_client := openapiclient.NewAPIClient(configuration)
+    resp, r, err := api_client.DefaultApi.VmmNmiPut(context.Background()).Execute()
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "Error when calling `DefaultApi.VmmNmiPut``: %v\n", err)
+        fmt.Fprintf(os.Stderr, "Full HTTP response: %v\n", r)
+    }
+}
+```
+
+### Path Parameters
+
+This endpoint does not need any parameter.
+
+### Other Parameters
+
+Other parameters are passed through a pointer to a apiVmmNmiPutRequest struct via the builder pattern
+
+
+### Return type
+
+ (empty response body)
+
+### Authorization
+
+No authorization required
+
+### HTTP request headers
+
+- **Content-Type**: Not defined
 - **Accept**: Not defined
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints)

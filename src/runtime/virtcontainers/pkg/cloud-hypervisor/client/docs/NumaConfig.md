@@ -8,7 +8,8 @@ Name | Type | Description | Notes
 **Cpus** | Pointer to **[]int32** |  | [optional] 
 **Distances** | Pointer to [**[]NumaDistance**](NumaDistance.md) |  | [optional] 
 **MemoryZones** | Pointer to **[]string** |  | [optional] 
-**SgxEpcSections** | Pointer to **[]string** |  | [optional] 
+**PciSegments** | Pointer to **[]int32** |  | [optional] 
+**DeviceId** | Pointer to **string** |  | [optional] 
 
 ## Methods
 
@@ -124,30 +125,55 @@ SetMemoryZones sets MemoryZones field to given value.
 
 HasMemoryZones returns a boolean if a field has been set.
 
-### GetSgxEpcSections
+### GetPciSegments
 
-`func (o *NumaConfig) GetSgxEpcSections() []string`
+`func (o *NumaConfig) GetPciSegments() []int32`
 
-GetSgxEpcSections returns the SgxEpcSections field if non-nil, zero value otherwise.
+GetPciSegments returns the PciSegments field if non-nil, zero value otherwise.
 
-### GetSgxEpcSectionsOk
+### GetPciSegmentsOk
 
-`func (o *NumaConfig) GetSgxEpcSectionsOk() (*[]string, bool)`
+`func (o *NumaConfig) GetPciSegmentsOk() (*[]int32, bool)`
 
-GetSgxEpcSectionsOk returns a tuple with the SgxEpcSections field if it's non-nil, zero value otherwise
+GetPciSegmentsOk returns a tuple with the PciSegments field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetSgxEpcSections
+### SetPciSegments
 
-`func (o *NumaConfig) SetSgxEpcSections(v []string)`
+`func (o *NumaConfig) SetPciSegments(v []int32)`
 
-SetSgxEpcSections sets SgxEpcSections field to given value.
+SetPciSegments sets PciSegments field to given value.
 
-### HasSgxEpcSections
+### HasPciSegments
 
-`func (o *NumaConfig) HasSgxEpcSections() bool`
+`func (o *NumaConfig) HasPciSegments() bool`
 
-HasSgxEpcSections returns a boolean if a field has been set.
+HasPciSegments returns a boolean if a field has been set.
+
+### GetDeviceId
+
+`func (o *NumaConfig) GetDeviceId() string`
+
+GetDeviceId returns the DeviceId field if non-nil, zero value otherwise.
+
+### GetDeviceIdOk
+
+`func (o *NumaConfig) GetDeviceIdOk() (*string, bool)`
+
+GetDeviceIdOk returns a tuple with the DeviceId field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetDeviceId
+
+`func (o *NumaConfig) SetDeviceId(v string)`
+
+SetDeviceId sets DeviceId field to given value.
+
+### HasDeviceId
+
+`func (o *NumaConfig) HasDeviceId() bool`
+
+HasDeviceId returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

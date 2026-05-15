@@ -160,6 +160,24 @@ paths:
           description: The VM instance was successfully resized.
         404:
           description: The VM instance could not be resized because it is not created.
+        429:
+          description: The VM instance could not be resized because a cpu removal is still pending.
+
+  /vm.resize-disk:
+    put:
+      summary: Resize a disk
+      requestBody:
+        description: Resizes a disk attached to the VM
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VmResizeDisk"
+        required: true
+      responses:
+        204:
+          description: The disk was successfully resized.
+        500:
+          description: The disk could not be resized.
 
   /vm.resize-zone:
     put:
@@ -347,6 +365,28 @@ paths:
         500:
           description: The new vDPA device could not be added to the VM instance.
 
+  /vm.add-user-device:
+    put:
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VmAddUserDevice'
+        description: The path of the new device
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PciDeviceInfo'
+          description: The new device was successfully added to the VM instance.
+        "204":
+          description: The new device was successfully (cold) added to the VM instance.
+        "404":
+          description: The new device could not be added to the VM instance.
+      summary: Add a new userspace device to the VM
+
   /vm.snapshot:
     put:
       summary: Returns a VM snapshot.
@@ -382,6 +422,13 @@ paths:
           description: The VM instance could not be coredumped because it is not created.
         405:
           description: The VM instance could not be coredumped because it is not booted.
+
+  /vmm.nmi:
+    put:
+      summary: Inject an NMI.
+      responses:
+        204:
+          description: The NMI successfully injected.
 
   /vm.restore:
     put:
@@ -438,8 +485,17 @@ components:
         - version
       type: object
       properties:
+        build_version:
+          type: string
         version:
           type: string
+        pid:
+          type: integer
+          format: int64
+        features:
+          type: array
+          items:
+            type: string
       description: Virtual Machine Monitor information
 
     VmInfo:
@@ -510,6 +566,10 @@ components:
           type: string
         initramfs:
           type: string
+        igvm:
+          type: string
+        host_data:
+          type: string
       description: Payloads to boot in guest
 
     VmConfig:
@@ -523,6 +583,10 @@ components:
           $ref: "#/components/schemas/MemoryConfig"
         payload:
           $ref: "#/components/schemas/PayloadConfig"
+        rate_limit_groups:
+          type: array
+          items:
+            $ref: "#/components/schemas/RateLimitGroupConfig"
         disks:
           type: array
           items:
@@ -547,6 +611,8 @@ components:
           $ref: "#/components/schemas/ConsoleConfig"
         console:
           $ref: "#/components/schemas/ConsoleConfig"
+        debug_console:
+          $ref: "#/components/schemas/DebugConsoleConfig"
         devices:
           type: array
           items:
@@ -557,10 +623,6 @@ components:
             $ref: "#/components/schemas/VdpaConfig"
         vsock:
           $ref: "#/components/schemas/VsockConfig"
-        sgx_epc:
-          type: array
-          items:
-            $ref: "#/components/schemas/SgxEpcConfig"
         numa:
           type: array
           items:
@@ -571,13 +633,30 @@ components:
         watchdog:
           type: boolean
           default: false
+        pvpanic:
+          type: boolean
+          default: false
+        pci_segments:
+          type: array
+          items:
+            $ref: "#/components/schemas/PciSegmentConfig"
         platform:
           $ref: "#/components/schemas/PlatformConfig"
         tpm:
           $ref: "#/components/schemas/TpmConfig"
+        landlock_enable:
+          type: boolean
+          default: false
+        landlock_rules:
+          type: array
+          items:
+            $ref: "#/components/schemas/LandlockConfig"
       description: Virtual machine configuration
 
     CpuAffinity:
+      required:
+        - vcpu
+        - host_cpus
       type: object
       properties:
         vcpu:
@@ -613,11 +692,9 @@ components:
       properties:
         boot_vcpus:
           minimum: 1
-          default: 1
           type: integer
         max_vcpus:
           minimum: 1
-          default: 1
           type: integer
         topology:
           $ref: "#/components/schemas/CpuTopology"
@@ -626,12 +703,30 @@ components:
           default: false
         max_phys_bits:
           type: integer
+        nested:
+          type: boolean
+          default: true
         affinity:
           type: array
           items:
             $ref: "#/components/schemas/CpuAffinity"
         features:
           $ref: "#/components/schemas/CpuFeatures"
+
+    PciSegmentConfig:
+      required:
+        - pci_segment
+      type: object
+      properties:
+        pci_segment:
+          type: integer
+          format: int16
+        mmio32_aperture_weight:
+          type: integer
+          format: int32
+        mmio64_aperture_weight:
+          type: integer
+          format: int32
 
     PlatformConfig:
       type: object
@@ -644,6 +739,9 @@ components:
           items:
             type: integer
             format: int16
+        iommu_address_width:
+          type: integer
+          format: uint8
         serial_number:
           type: string
         uuid:
@@ -653,6 +751,9 @@ components:
           items:
             type: string
         tdx:
+          type: boolean
+          default: false
+        sev_snp:
           type: boolean
           default: false
 
@@ -667,7 +768,6 @@ components:
         size:
           type: integer
           format: int64
-          default: 512 MB
         file:
           type: string
         mergeable:
@@ -703,7 +803,6 @@ components:
         size:
           type: integer
           format: int64
-          default: 512 MB
         hotplug_size:
           type: integer
           format: int64
@@ -778,9 +877,31 @@ components:
         Defines an IO rate limiter with independent bytes/s and ops/s limits.
         Limits are defined by configuring each of the _bandwidth_ and _ops_ token buckets.
 
-    DiskConfig:
+    RateLimitGroupConfig:
       required:
-        - path
+        - id
+        - rate_limiter_config
+      type: object
+      properties:
+        id:
+          type: string
+        rate_limiter_config:
+          $ref: "#/components/schemas/RateLimiterConfig"
+
+    VirtQueueAffinity:
+      required:
+        - queue_index
+        - host_cpus
+      type: object
+      properties:
+        queue_index:
+          type: integer
+        host_cpus:
+          type: array
+          items:
+            type: integer
+
+    DiskConfig:
       type: object
       properties:
         path:
@@ -812,6 +933,24 @@ components:
           format: int16
         id:
           type: string
+        serial:
+          type: string
+        rate_limit_group:
+          type: string
+        queue_affinity:
+          type: array
+          items:
+            $ref: "#/components/schemas/VirtQueueAffinity"
+        backing_files:
+          type: boolean
+          default: false
+        sparse:
+          type: boolean
+          default: true
+        image_type:
+          type: string
+          enum: [FixedVhd, Qcow2, Raw, Vhdx, Unknown]
+
 
     NetConfig:
       type: object
@@ -821,9 +960,11 @@ components:
         ip:
           type: string
           default: "192.168.249.1"
+          description: IPv4 or IPv6 address
         mask:
           type: string
           default: "255.255.255.0"
+          description: Must be a valid IPv4 netmask if ip is an IPv4 address or a valid IPv6 netmask if ip is an IPv6 address.
         mac:
           type: string
         host_mac:
@@ -854,6 +995,15 @@ components:
           format: int16
         rate_limiter_config:
           $ref: "#/components/schemas/RateLimiterConfig"
+        offload_tso:
+          type: boolean
+          default: true
+        offload_ufo:
+          type: boolean
+          default: true
+        offload_csum:
+          type: boolean
+          default: true
 
     RngConfig:
       required:
@@ -862,7 +1012,6 @@ components:
       properties:
         src:
           type: string
-          default: "/dev/urandom"
         iommu:
           type: boolean
           default: false
@@ -937,12 +1086,27 @@ components:
       properties:
         file:
           type: string
+        socket:
+          type: string
         mode:
           type: string
-          enum: [Off, Pty, Tty, File, Null]
+          enum: ["Off", "Pty", "Tty", "File", "Socket", "Null"]
         iommu:
           type: boolean
           default: false
+
+    DebugConsoleConfig:
+      required:
+        - mode
+      type: object
+      properties:
+        file:
+          type: string
+        mode:
+          type: string
+          enum: ["Off", "Pty", "Tty", "File", "Null"]
+        iobase:
+          type: integer
 
     DeviceConfig:
       required:
@@ -959,7 +1123,9 @@ components:
           format: int16
         id:
           type: string
-
+        x_nv_gpudirect_clique:
+          type: integer
+          format: int8
     TpmConfig:
       required:
         - socket
@@ -1011,21 +1177,6 @@ components:
         id:
           type: string
 
-    SgxEpcConfig:
-      required:
-        - id
-        - size
-      type: object
-      properties:
-        id:
-          type: string
-        size:
-          type: integer
-          format: int64
-        prefault:
-          type: boolean
-          default: false
-
     NumaDistance:
       required:
         - destination
@@ -1060,10 +1211,13 @@ components:
           type: array
           items:
             type: string
-        sgx_epc_sections:
+        pci_segments:
           type: array
           items:
-            type: string
+            type: integer
+            format: int32
+        device_id:
+          type: string
 
     VmResize:
       type: object
@@ -1077,6 +1231,17 @@ components:
           format: int64
         desired_balloon:
           description: desired balloon size in bytes
+          type: integer
+          format: int64
+
+    VmResizeDisk:
+      type: object
+      properties:
+        id:
+          description: disk identifier
+          type: string
+        desired_size:
+          description: desired disk size in bytes
           type: integer
           format: int64
 
@@ -1135,3 +1300,22 @@ components:
           type: string
         local:
           type: boolean
+
+    VmAddUserDevice:
+      required:
+        - socket
+      type: object
+      properties:
+        socket:
+          type: string
+
+    LandlockConfig:
+      required:
+        - path
+        - access
+      type: object
+      properties:
+        path:
+          type: string
+        access:
+          type: string

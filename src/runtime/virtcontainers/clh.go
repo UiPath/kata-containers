@@ -639,8 +639,10 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 
 	if imagePath != "" {
 		if clh.config.ConfidentialGuest {
-			disk := chclient.NewDiskConfig(imagePath)
+			disk := chclient.NewDiskConfig()
 			disk.SetReadonly(true)
+			disk.SetPath(imagePath)
+			disk.SetImageType("Raw")
 
 			diskRateLimiterConfig := clh.getDiskRateLimiterConfig()
 			if diskRateLimiterConfig != nil {
@@ -676,6 +678,7 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 		// so that we can gather early OS booting log
 		if clh.config.Debug {
 			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctTTY)
+
 		} else {
 			clh.vmconfig.Serial = chclient.NewConsoleConfig(cctOFF)
 		}
@@ -729,18 +732,6 @@ func (clh *cloudHypervisor) CreateVM(ctx context.Context, id string, network Net
 	clh.virtiofsDaemon, err = clh.createVirtiofsDaemon(hypervisorConfig.SharedPath)
 	if err != nil {
 		return err
-	}
-
-	if clh.config.SGXEPCSize > 0 {
-		epcSection := chclient.NewSgxEpcConfig("kata-epc", clh.config.SGXEPCSize)
-		epcSection.Prefault = func(b bool) *bool { return &b }(true)
-
-		if clh.vmconfig.SgxEpc != nil {
-			*clh.vmconfig.SgxEpc = append(*clh.vmconfig.SgxEpc, *epcSection)
-		} else {
-			clh.vmconfig.SgxEpc = &[]chclient.SgxEpcConfig{*epcSection}
-		}
-
 	}
 
 	return nil
@@ -927,7 +918,9 @@ func (clh *cloudHypervisor) hotplugAddBlockDevice(drive *config.BlockDrive) erro
 	}
 
 	// Create the clh disk config via the constructor to ensure default values are properly assigned
-	clhDisk := *chclient.NewDiskConfig(drive.File)
+	clhDisk := *chclient.NewDiskConfig()
+	clhDisk.SetPath(drive.File)
+	clhDisk.SetImageType("Raw")
 	clhDisk.Readonly = &drive.ReadOnly
 	clhDisk.VhostUser = func(b bool) *bool { return &b }(false)
 

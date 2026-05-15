@@ -92,6 +92,7 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmAddFsPut**](docs/DefaultApi.md#vmaddfsput) | **Put** /vm.add-fs | Add a new virtio-fs device to the VM
 *DefaultApi* | [**VmAddNetPut**](docs/DefaultApi.md#vmaddnetput) | **Put** /vm.add-net | Add a new network device to the VM
 *DefaultApi* | [**VmAddPmemPut**](docs/DefaultApi.md#vmaddpmemput) | **Put** /vm.add-pmem | Add a new pmem device to the VM
+*DefaultApi* | [**VmAddUserDevicePut**](docs/DefaultApi.md#vmadduserdeviceput) | **Put** /vm.add-user-device | Add a new userspace device to the VM
 *DefaultApi* | [**VmAddVdpaPut**](docs/DefaultApi.md#vmaddvdpaput) | **Put** /vm.add-vdpa | Add a new vDPA device to the VM
 *DefaultApi* | [**VmAddVsockPut**](docs/DefaultApi.md#vmaddvsockput) | **Put** /vm.add-vsock | Add a new vsock device to the VM
 *DefaultApi* | [**VmCoredumpPut**](docs/DefaultApi.md#vmcoredumpput) | **Put** /vm.coredump | Takes a VM coredump.
@@ -99,11 +100,13 @@ Class | Method | HTTP request | Description
 *DefaultApi* | [**VmInfoGet**](docs/DefaultApi.md#vminfoget) | **Get** /vm.info | Returns general information about the cloud-hypervisor Virtual Machine (VM) instance.
 *DefaultApi* | [**VmReceiveMigrationPut**](docs/DefaultApi.md#vmreceivemigrationput) | **Put** /vm.receive-migration | Receive a VM migration from URL
 *DefaultApi* | [**VmRemoveDevicePut**](docs/DefaultApi.md#vmremovedeviceput) | **Put** /vm.remove-device | Remove a device from the VM
+*DefaultApi* | [**VmResizeDiskPut**](docs/DefaultApi.md#vmresizediskput) | **Put** /vm.resize-disk | Resize a disk
 *DefaultApi* | [**VmResizePut**](docs/DefaultApi.md#vmresizeput) | **Put** /vm.resize | Resize the VM
 *DefaultApi* | [**VmResizeZonePut**](docs/DefaultApi.md#vmresizezoneput) | **Put** /vm.resize-zone | Resize a memory zone
 *DefaultApi* | [**VmRestorePut**](docs/DefaultApi.md#vmrestoreput) | **Put** /vm.restore | Restore a VM from a snapshot.
 *DefaultApi* | [**VmSendMigrationPut**](docs/DefaultApi.md#vmsendmigrationput) | **Put** /vm.send-migration | Send a VM migration to URL
 *DefaultApi* | [**VmSnapshotPut**](docs/DefaultApi.md#vmsnapshotput) | **Put** /vm.snapshot | Returns a VM snapshot.
+*DefaultApi* | [**VmmNmiPut**](docs/DefaultApi.md#vmmnmiput) | **Put** /vmm.nmi | Inject an NMI.
 *DefaultApi* | [**VmmPingGet**](docs/DefaultApi.md#vmmpingget) | **Get** /vmm.ping | Ping the VMM to check for API server availability
 
 
@@ -115,10 +118,12 @@ Class | Method | HTTP request | Description
  - [CpuFeatures](docs/CpuFeatures.md)
  - [CpuTopology](docs/CpuTopology.md)
  - [CpusConfig](docs/CpusConfig.md)
+ - [DebugConsoleConfig](docs/DebugConsoleConfig.md)
  - [DeviceConfig](docs/DeviceConfig.md)
  - [DeviceNode](docs/DeviceNode.md)
  - [DiskConfig](docs/DiskConfig.md)
  - [FsConfig](docs/FsConfig.md)
+ - [LandlockConfig](docs/LandlockConfig.md)
  - [MemoryConfig](docs/MemoryConfig.md)
  - [MemoryZoneConfig](docs/MemoryZoneConfig.md)
  - [NetConfig](docs/NetConfig.md)
@@ -126,22 +131,26 @@ Class | Method | HTTP request | Description
  - [NumaDistance](docs/NumaDistance.md)
  - [PayloadConfig](docs/PayloadConfig.md)
  - [PciDeviceInfo](docs/PciDeviceInfo.md)
+ - [PciSegmentConfig](docs/PciSegmentConfig.md)
  - [PlatformConfig](docs/PlatformConfig.md)
  - [PmemConfig](docs/PmemConfig.md)
+ - [RateLimitGroupConfig](docs/RateLimitGroupConfig.md)
  - [RateLimiterConfig](docs/RateLimiterConfig.md)
  - [ReceiveMigrationData](docs/ReceiveMigrationData.md)
  - [RestoreConfig](docs/RestoreConfig.md)
  - [RngConfig](docs/RngConfig.md)
  - [SendMigrationData](docs/SendMigrationData.md)
- - [SgxEpcConfig](docs/SgxEpcConfig.md)
  - [TokenBucket](docs/TokenBucket.md)
  - [TpmConfig](docs/TpmConfig.md)
  - [VdpaConfig](docs/VdpaConfig.md)
+ - [VirtQueueAffinity](docs/VirtQueueAffinity.md)
+ - [VmAddUserDevice](docs/VmAddUserDevice.md)
  - [VmConfig](docs/VmConfig.md)
  - [VmCoredumpData](docs/VmCoredumpData.md)
  - [VmInfo](docs/VmInfo.md)
  - [VmRemoveDevice](docs/VmRemoveDevice.md)
  - [VmResize](docs/VmResize.md)
+ - [VmResizeDisk](docs/VmResizeDisk.md)
  - [VmResizeZone](docs/VmResizeZone.md)
  - [VmSnapshotConfig](docs/VmSnapshotConfig.md)
  - [VmmPingResponse](docs/VmmPingResponse.md)
