@@ -84,3 +84,7 @@ func (c *DarwinResourceController) UpdateCpuSet(cpuset, memset string) error {
 func (c *DarwinResourceController) Path() string {
 	return ""
 }
+
+func (c *DarwinResourceController) ContainsProcess(pid int) (bool, error) {
+	return false, nil
+}

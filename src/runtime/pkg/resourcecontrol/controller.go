@@ -79,4 +79,6 @@ type ResourceController interface {
 
 	// UpdateCpuSet updates the set of controlled CPUs and memory nodes.
 	UpdateCpuSet(string, string) error
+
+	ContainsProcess(int) (bool, error)
 }

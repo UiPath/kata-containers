@@ -2722,10 +2722,22 @@ func (s *Sandbox) resourceControllerDelete() error {
 		if err := sandboxController.MoveTo(resCtrlParent); err != nil {
 			return err
 		}
-	}
 
-	if err := sandboxController.Delete(); err != nil {
-		return err
+		if err := sandboxController.Delete(); err != nil {
+			return err
+		}
+	} else {
+		sameCgroup, err := sandboxController.ContainsProcess(os.Getpid())
+		if err != nil {
+			return err
+		}
+		if sameCgroup {
+			s.Logger().Info("Sandbox controller contains current process, skipping delete")
+		} else {
+			if err := sandboxController.Delete(); err != nil {
+				s.Logger().Warnf("Failed to delete sandbox controller: %v", err)
+			}
+		}
 	}
 
 	if s.state.OverheadCgroupPath != "" {

@@ -369,6 +369,45 @@ func (c *LinuxCgroup) Update(resources *specs.LinuxResources) error {
 	}
 }
 
+func (c *LinuxCgroup) ContainsProcess(pid int) (bool, error) {
+	switch cg := c.cgroup.(type) {
+	case cgroups.Cgroup:
+		for _, subsystem := range cg.Subsystems() {
+			processess, err := cg.Processes(subsystem.Name(), true)
+			if err != nil {
+				return false, err
+			}
+
+			found := false
+			for _, p := range processess {
+				if p.Pid == pid {
+					found = true
+					break
+				}
+			}
+
+			if !found {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	case *cgroupsv2.Manager:
+		procs, err := cg.Procs(true)
+		if err != nil {
+			return false, err
+		}
+		for _, p := range procs {
+			if p == uint64(pid) {
+				return true, nil
+			}
+		}
+		return false, nil
+	default:
+		return false, ErrCgroupMode
+	}
+}
+
 func (c *LinuxCgroup) MoveTo(path string) error {
 	switch cg := c.cgroup.(type) {
 	case cgroups.Cgroup:
