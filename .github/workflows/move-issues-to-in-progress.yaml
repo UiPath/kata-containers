@@ -13,7 +13,7 @@ on:
 
 jobs:
   move-linked-issues-to-in-progress:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Install hub
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
@@ -38,7 +38,7 @@ jobs:
 
       - name: Checkout code to allow hub to communicate with the project
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'force-skip-ci') }}
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0

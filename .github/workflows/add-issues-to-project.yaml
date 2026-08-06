@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   add-new-issues-to-backlog:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Install hub
         run: |
@@ -39,7 +39,7 @@ jobs:
           popd &>/dev/null
 
       - name: Checkout code to allow hub to communicate with the project
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Add issue to issue backlog
         env:

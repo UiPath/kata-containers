@@ -4,10 +4,10 @@ on:
 
 jobs:
   release:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
 
@@ -46,20 +46,20 @@ jobs:
     secrets: inherit
 
   publish-multi-arch-images:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Login to Kata Containers docker.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Login to Kata Containers quay.io
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9  # v3.7.0
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_DEPLOYER_USERNAME }}
@@ -78,10 +78,10 @@ jobs:
 
   upload-multi-arch-static-tarball:
     needs: [build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le]
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Set KATA_STATIC_TARBALL env var
         run: |
@@ -89,7 +89,7 @@ jobs:
           echo "KATA_STATIC_TARBALL=${tarball}" >> "$GITHUB_ENV"
 
       - name: Download amd64 artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: kata-static-tarball-amd64
 
@@ -101,7 +101,7 @@ jobs:
           ARCHITECTURE: amd64
 
       - name: Download arm64 artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: kata-static-tarball-arm64
 
@@ -113,7 +113,7 @@ jobs:
           ARCHITECTURE: arm64
 
       - name: Download s390x artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: kata-static-tarball-s390x
 
@@ -125,7 +125,7 @@ jobs:
           ARCHITECTURE: s390x
 
       - name: Download ppc64le artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: kata-static-tarball-ppc64le
 
@@ -138,10 +138,10 @@ jobs:
 
   upload-versions-yaml:
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Upload versions.yaml to GitHub
         run: |
@@ -151,10 +151,10 @@ jobs:
 
   upload-cargo-vendored-tarball:
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Generate and upload vendored code tarball
         run: |
@@ -164,10 +164,10 @@ jobs:
 
   upload-libseccomp-tarball:
     needs: release
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Download libseccomp tarball and upload it to GitHub
         run: |
@@ -177,10 +177,10 @@ jobs:
 
   publish-release:
     needs: [ build-and-push-assets-amd64, build-and-push-assets-arm64, build-and-push-assets-s390x, build-and-push-assets-ppc64le, publish-multi-arch-images, upload-multi-arch-static-tarball, upload-versions-yaml, upload-cargo-vendored-tarball, upload-libseccomp-tarball ]
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
 
       - name: Publish a release
         run: |

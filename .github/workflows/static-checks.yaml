@@ -21,10 +21,10 @@ jobs:
   check-kernel-config-version:
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
       - name: Ensure the kernel config version has been updated
@@ -50,7 +50,7 @@ jobs:
       instance: ubuntu-22.04
 
   build-checks-depending-on-kvm:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     strategy:
@@ -65,7 +65,7 @@ jobs:
             component-path: src/dragonball
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
       - name: Install system deps
@@ -89,7 +89,7 @@ jobs:
           RUST_BACKTRACE: "1"
 
   static-checks:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     needs: skipper
     if: ${{ needs.skipper.outputs.skip_static != 'yes' }}
     strategy:
@@ -101,7 +101,7 @@ jobs:
       GOPATH: ${{ github.workspace }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           fetch-depth: 0
           path: ./src/github.com/${{ github.repository }}

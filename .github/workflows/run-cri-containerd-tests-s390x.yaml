@@ -29,7 +29,7 @@ jobs:
       GOPATH: ${{ github.workspace }}
       KATA_HYPERVISOR: ${{ matrix.vmm }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
         with:
           ref: ${{ inputs.commit-hash }}
           fetch-depth: 0
@@ -44,7 +44,7 @@ jobs:
         run: bash tests/integration/cri-containerd/gha-run.sh install-dependencies
 
       - name: get-kata-tarball
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093  # v4.3.0
         with:
           name: kata-static-tarball-s390x${{ inputs.tarball-suffix }}
           path: kata-artifacts

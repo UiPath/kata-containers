@@ -5,14 +5,14 @@ on:
 name: Docs URL Alive Check
 jobs:
   test:
-    runs-on: ubuntu-22.04
+    runs-on: uipath-ubuntu-22.04
     # don't run this action on forks
     if: github.repository_owner == 'kata-containers'
     env:
       target_branch: ${{ github.base_ref }}
     steps:
     - name: Install Go
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@bfdd3570ce990073878bf10f6b2d79082de49492  # v2.2.0
       with:
         go-version: 1.22.2
       env:
@@ -22,7 +22,7 @@ jobs:
         echo "GOPATH=${{ github.workspace }}" >> $GITHUB_ENV
         echo "${{ github.workspace }}/bin" >> $GITHUB_PATH
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262  # v4.4.0
       with:
         fetch-depth: 0
         path: ./src/github.com/${{ github.repository }}
