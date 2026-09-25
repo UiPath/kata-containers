@@ -28,23 +28,24 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/diff"
-	"github.com/containerd/containerd/errdefs"
-	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/labels"
-	"github.com/containerd/containerd/log"
-	"github.com/containerd/containerd/mount"
-	"github.com/containerd/containerd/pkg/cleanup"
-	"github.com/containerd/containerd/pkg/kmutex"
-	"github.com/containerd/containerd/platforms"
-	"github.com/containerd/containerd/snapshots"
-	"github.com/containerd/containerd/tracing"
+	"github.com/containerd/log"
+	"github.com/containerd/platforms"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/identity"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"golang.org/x/sync/errgroup"
 	"golang.org/x/sync/semaphore"
+
+	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/diff"
+	"github.com/containerd/containerd/errdefs"
+	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/labels"
+	"github.com/containerd/containerd/mount"
+	"github.com/containerd/containerd/pkg/cleanup"
+	"github.com/containerd/containerd/pkg/kmutex"
+	"github.com/containerd/containerd/snapshots"
+	"github.com/containerd/containerd/tracing"
 )
 
 const (
@@ -160,8 +161,18 @@ func NewUnpacker(ctx context.Context, cs content.Store, opts ...UnpackerOpt) (*U
 // process will be started in a goroutine.
 func (u *Unpacker) Unpack(h images.Handler) images.Handler {
 	var (
-		lock   sync.Mutex
-		layers = map[digest.Digest][]ocispec.Descriptor{}
+		lock sync.Mutex
+		// Maps a config's digest to the layer descriptors of each manifest
+		// that names it, one slice per manifest. Layers cannot be unpacked
+		// until the diffIDs are known from the config. Manifests can share a
+		// config (compression variants of one image have identical diffIDs
+		// and so identical configs), which is why one digest can hold the
+		// layers of several manifests.
+		queuedLayers = map[digest.Digest][][]ocispec.Descriptor{}
+		// Maps a config's digest to the layer descriptors selected for unpack.
+		// Once these layers are queued for fetch, the value is set to nil. The key
+		// remains to prevent scheduling another unpack.
+		unpackedLayers = map[digest.Digest][]ocispec.Descriptor{}
 	)
 	return images.HandlerFunc(func(ctx context.Context, desc ocispec.Descriptor) ([]ocispec.Descriptor, error) {
 		ctx, span := tracing.StartSpan(ctx, tracing.Name(unpackSpanPrefix, "UnpackHandler"))
@@ -196,20 +207,53 @@ func (u *Unpacker) Unpack(h images.Handler) images.Handler {
 				}
 			}
 
+			if len(manifestLayers) == 0 {
+				return nonLayers, nil
+			}
+
 			lock.Lock()
 			for _, nl := range nonLayers {
-				layers[nl.Digest] = manifestLayers
+				if images.IsConfigType(nl.MediaType) {
+					queuedLayers[nl.Digest] = append(queuedLayers[nl.Digest], manifestLayers)
+				}
 			}
 			lock.Unlock()
 
 			children = nonLayers
 		case images.MediaTypeDockerSchema2Config, ocispec.MediaTypeImageConfig:
 			lock.Lock()
-			l := layers[desc.Digest]
+			queued := queuedLayers[desc.Digest]
+			delete(queuedLayers, desc.Digest)
+			// Because manifests that share the same config unpack to the same
+			// snapshot chain, we only need to unpack the layers for one
+			// manifest. The layers for any remaining manifests sharing that
+			// config are still fetched to ensure they make it in the content
+			// store.
+			var first []ocispec.Descriptor
+			unpacked, ok := unpackedLayers[desc.Digest]
+			if !ok && len(queued) > 0 {
+				first, queued = queued[0], queued[1:]
+				unpacked = first
+				unpackedLayers[desc.Digest] = first
+			}
+			// Unpack may skip fetching layers whose snapshots already exist.
+			// If another manifest shares this config, explicitly fetch the first
+			// manifest's layers too so every manifest's blobs reach the content
+			// store. For a config used by only one manifest, leave fetching to
+			// unpack.
+			if len(queued) > 0 && len(unpacked) > 0 {
+				queued = append(queued, unpacked)
+				unpackedLayers[desc.Digest] = nil
+			}
 			lock.Unlock()
-			if len(l) > 0 {
+			if len(first) > 0 {
 				u.eg.Go(func() error {
-					return u.unpack(h, desc, l)
+					return u.unpack(h, desc, first)
+				})
+			}
+			for _, layers := range queued {
+				u.eg.Go(func() error {
+					return u.fetch(u.ctx, h, layers, nil)
 				})
 			}
 		}
@@ -263,7 +307,8 @@ func (u *Unpacker) unpack(
 	}
 
 	if unpack == nil {
-		return fmt.Errorf("unpacker does not support platform %s for image %s", imgPlatform, config.Digest)
+		log.G(ctx).WithField("image", config.Digest).WithField("platform", platforms.Format(imgPlatform)).Debugf("unpacker does not support platform, only fetching layers")
+		return u.fetch(ctx, h, layers, nil)
 	}
 
 	atomic.AddInt32(&u.unpacks, 1)
@@ -295,13 +340,6 @@ func (u *Unpacker) unpack(
 			return err
 		}
 		defer unlock()
-
-		if _, err := sn.Stat(ctx, chainID); err == nil {
-			// no need to handle
-			return nil
-		} else if !errdefs.IsNotFound(err) {
-			return fmt.Errorf("failed to stat snapshot %s: %w", chainID, err)
-		}
 
 		// inherits annotations which are provided as snapshot labels.
 		snapshotLabels := snapshots.FilterInheritedLabels(desc.Annotations)
@@ -461,12 +499,18 @@ func (u *Unpacker) fetch(ctx context.Context, h images.Handler, layers []ocispec
 			tracing.Attribute("layer.media.digest", desc.Digest.String()),
 		)
 		desc := desc
-		i := i
+		var ch chan struct{}
+		if done != nil {
+			ch = done[i]
+		}
+
 		if err := u.acquire(ctx); err != nil {
 			return err
 		}
 
 		eg.Go(func() error {
+			defer layerSpan.End()
+
 			unlock, err := u.lockBlobDescriptor(ctx2, desc)
 			if err != nil {
 				u.release()
@@ -481,11 +525,12 @@ func (u *Unpacker) fetch(ctx context.Context, h images.Handler, layers []ocispec
 			if err != nil && !errors.Is(err, images.ErrSkipDesc) {
 				return err
 			}
-			close(done[i])
+			if ch != nil {
+				close(ch)
+			}
 
 			return nil
 		})
-		layerSpan.End()
 	}
 
 	return eg.Wait()
