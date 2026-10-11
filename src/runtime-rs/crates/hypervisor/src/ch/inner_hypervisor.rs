@@ -862,12 +862,22 @@ impl CloudHypervisorInner {
     pub(crate) async fn capabilities(&self) -> Result<Capabilities> {
         let mut caps = Capabilities::default();
 
-        let flags = CapabilityBits::BlockDeviceSupport
-            | CapabilityBits::BlockDeviceHotplugSupport
-            | CapabilityBits::BlockDeviceDiscardSupport
-            | CapabilityBits::FsSharingSupport
-            | CapabilityBits::HybridVsockSupport
-            | CapabilityBits::NetworkDeviceHotplugSupport;
+        // With shared_fs = "none" there is no virtio-fs device: volumes have to be
+        // copied or kept guest-local instead.
+        let flags = if self.config.shared_fs.shared_fs.is_none() {
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
+                | CapabilityBits::HybridVsockSupport
+                | CapabilityBits::NetworkDeviceHotplugSupport
+        } else {
+            CapabilityBits::BlockDeviceSupport
+                | CapabilityBits::BlockDeviceHotplugSupport
+                | CapabilityBits::BlockDeviceDiscardSupport
+                | CapabilityBits::FsSharingSupport
+                | CapabilityBits::HybridVsockSupport
+                | CapabilityBits::NetworkDeviceHotplugSupport
+        };
 
         caps.set(flags);
 
@@ -1095,6 +1105,17 @@ mod tests {
             .await
             .unwrap()
             .is_network_device_hotplug_supported());
+    }
+
+    #[actix_rt::test]
+    async fn test_fs_sharing_capability_follows_shared_fs() {
+        let mut ch = CloudHypervisorInner::default();
+
+        ch.config.shared_fs.shared_fs = None;
+        assert!(!ch.capabilities().await.unwrap().is_fs_sharing_supported());
+
+        ch.config.shared_fs.shared_fs = Some("virtio-fs".to_string());
+        assert!(ch.capabilities().await.unwrap().is_fs_sharing_supported());
     }
 
     #[test]
