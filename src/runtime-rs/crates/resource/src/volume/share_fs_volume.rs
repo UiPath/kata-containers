@@ -63,10 +63,8 @@ pub(crate) struct ShareFsVolume {
 
     // Add volume manager reference
     volume_manager: Option<Arc<VolumeManager>>,
-    // Record the source path for cleanup
-    source_path: Option<String>,
-    // Record the container ID
-    container_id: String,
+    // Key of the volume state this mount holds a reference on, for cleanup
+    volume_key: Option<String>,
     // Retain release state so retries do not consume another container's reference.
     released: Mutex<Option<Release>>,
 }
@@ -297,19 +295,27 @@ pub struct VolumeManager {
 
 #[derive(Clone, Debug, Default)]
 struct VolumeState {
-    // Source path (on the host)
-    source_path: String,
     // Guest path
     guest_path: String,
-    // Reference count (how many containers are using it)
+    // Whether the source is a directory, so that nested sources can be found in its copy
+    is_dir: bool,
+    // Reference count (how many mounts are using it)
     ref_count: usize,
-    // List of container IDs using this volume
-    containers: HashSet<String>,
     // Monitor task handle (if any)
     monitor_task: Option<Arc<JoinHandle<()>>>,
 }
 
-#[allow(dead_code)]
+/// Guest location of a copied volume, as returned by `VolumeManager::get_or_create_volume`.
+#[derive(Debug, PartialEq)]
+pub(crate) struct VolumeLookup {
+    // Key of the volume state holding the reference
+    pub key: String,
+    // Guest path the mount should use
+    pub guest_path: String,
+    // True if the source still has to be copied to the guest
+    pub created: bool,
+}
+
 impl VolumeManager {
     pub fn new() -> Self {
         Self {
@@ -317,66 +323,104 @@ impl VolumeManager {
         }
     }
 
-    /// Gets or creates the volume's guest path
+    /// Gets or creates the volume's guest path.
+    ///
+    /// Without a shared filesystem every mount is a copy, so mounts that refer to the
+    /// same host file must refer to the same copy, or containers stop seeing each
+    /// other's writes (e.g. /etc/resolv.conf, which CRI mounts into every container of
+    /// the pod from one sandbox file). A source inside an already copied directory is
+    /// served from that directory's copy for the same reason.
     pub async fn get_or_create_volume(
         &self,
-        canonical_source: &str,
+        canonical_source: &Path,
+        is_dir: bool,
         container_id: &str,
         mount_destination: &Path,
-    ) -> Result<String> {
+    ) -> Result<VolumeLookup> {
         let mut states = self.volume_states.write().await;
 
-        if let Some(state) = states.get_mut(canonical_source) {
-            // Existing volume and update reference
+        for ancestor in canonical_source.ancestors() {
+            let key = ancestor.to_string_lossy().to_string();
+            let Some(state) = states.get_mut(&key) else {
+                continue;
+            };
+            if ancestor != canonical_source && !state.is_dir {
+                continue;
+            }
+
             state.ref_count += 1;
-            state.containers.insert(container_id.to_string());
+            let relative = canonical_source.strip_prefix(ancestor)?;
+            let guest_path = if relative.as_os_str().is_empty() {
+                state.guest_path.clone()
+            } else {
+                format!("{}/{}", state.guest_path, relative.display())
+            };
 
             info!(
                 sl!(),
                 "Existing volume: source={:?}, guest={:?}, ref_count={}",
                 canonical_source,
-                state.guest_path,
+                guest_path,
                 state.ref_count,
             );
+
+            return Ok(VolumeLookup {
+                key,
+                guest_path,
+                created: false,
+            });
+        }
+
+        if is_dir {
+            if let Some(nested) = states
+                .keys()
+                .find(|k| Path::new(k.as_str()).starts_with(canonical_source))
+            {
+                warn!(
+                    sl!(),
+                    "{:?} contains the already copied {:?}; their copies are separate and do not see each other's writes",
+                    canonical_source,
+                    nested,
+                );
+            }
         }
 
         // Create a new volume state
         let guest_path = generate_copy_file_guest_path(container_id, mount_destination)
             .context("generate path failed")?;
+        let key = canonical_source.to_string_lossy().to_string();
 
-        let mut containers = HashSet::new();
-        containers.insert(container_id.to_string());
-
-        let state = VolumeState {
-            source_path: canonical_source.to_string(),
-            guest_path: guest_path.clone(),
-            ref_count: 1,
-            containers,
-            monitor_task: None,
-        };
-
-        states.insert(state.source_path.clone(), state.clone());
+        states.insert(
+            key.clone(),
+            VolumeState {
+                guest_path: guest_path.clone(),
+                is_dir,
+                ref_count: 1,
+                monitor_task: None,
+            },
+        );
 
         info!(
             sl!(),
-            "Created new volume state: source={:?}, guest={:?}",
-            state.source_path,
-            state.guest_path,
+            "Created new volume state: source={:?}, guest={:?}", key, guest_path,
         );
 
-        // Return guest path
-        Ok(guest_path)
+        Ok(VolumeLookup {
+            key,
+            guest_path,
+            created: true,
+        })
     }
 
     /// Register monitor task into the volume manager
     pub async fn register_monitor(
         &self,
-        canonical_source: &str,
+        key: &str,
         monitor_task: Option<JoinHandle<()>>,
     ) -> Result<()> {
         let mut states = self.volume_states.write().await;
 
-        if let Some(state) = states.get_mut(canonical_source) {
+        if let Some(state) = states.get_mut(key) {
             if let Some(handle) = monitor_task {
                 state.monitor_task = Some(Arc::new(handle));
             }
@@ -386,35 +430,32 @@ impl VolumeManager {
     }
 
     /// Releases a volume reference
-    pub async fn release_volume(&self, source_path: &str, container_id: &str) -> Result<bool> {
+    pub async fn release_volume(&self, key: &str) -> Result<bool> {
         let mut states = self.volume_states.write().await;
 
-        let canonical_source = std::fs::canonicalize(source_path)
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| source_path.to_string());
+        let Some(state) = states.get_mut(key) else {
+            return Ok(false);
+        };
 
-        if let Some(state) = states.get_mut(&canonical_source) {
-            state.containers.remove(container_id);
-            state.ref_count = state.ref_count.saturating_sub(1);
-
-            if state.ref_count == 0 {
-                // Abort the monitor task
-                if let Some(handle) = &state.monitor_task {
-                    handle.abort();
-                }
-
-                info!(
-                    sl!(),
-                    "Volume has no more references, source={:?}, guest={:?}",
-                    canonical_source,
-                    state.guest_path
-                );
-
-                return Ok(true); // Can be cleaned up
-            }
+        state.ref_count = state.ref_count.saturating_sub(1);
+        if state.ref_count > 0 {
+            return Ok(false);
         }
 
-        Ok(false)
+        // Abort the monitor task
+        if let Some(handle) = &state.monitor_task {
+            handle.abort();
+        }
+
+        info!(
+            sl!(),
+            "Volume has no more references, source={:?}, guest={:?}", key, state.guest_path
+        );
+
+        // A later mount of the same source gets a fresh copy.
+        states.remove(key);
+
+        Ok(true) // Can be cleaned up
     }
 }
 
@@ -441,8 +482,7 @@ impl ShareFsVolume {
             mount: None,
             storages: vec![],
             volume_manager: Some(volume_manager.clone()),
-            source_path: Some(source_path.clone()),
-            container_id: cid.to_string(),
+            volume_key: None,
             released: Mutex::new(None),
         };
 
@@ -458,64 +498,38 @@ impl ShareFsVolume {
                     Ok(src) => src,
                 };
 
-                // set the oci::Mount structure of the volume
-                let mut oci_mount = oci::Mount::default();
-                oci_mount.set_destination(m.destination().clone());
-                oci_mount.set_typ(Some("bind".to_string()));
-                oci_mount.set_options(m.options().clone());
-
-                // If the mount source is a file, we can copy it to the sandbox
-                if src.is_file() {
-                    // Generate guest path
-                    let guest_path = generate_copy_file_guest_path(cid, m.destination())
-                        .context("generate path failed")?;
-                    // Copy a single file
-                    Self::copy_file_to_guest(&src, &guest_path, &agent)
-                        .await
-                        .context("copy file to guest")?;
-
-                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
-                    volume.mount = Some(oci_mount);
-                } else if src.is_dir() {
-                    // We allow directory copying wildly
-                    // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
-                    info!(sl!(), "copying directory {:?} to guest", &src);
-
-                    // Get or create the guest path
-                    let guest_path = volume_manager
-                        .get_or_create_volume(&src.to_string_lossy(), cid, m.destination())
-                        .await
-                        .context("get or create volume")?;
-
-                    // Create directory
-                    Self::copy_directory_to_guest(&src, &guest_path, &agent)
-                        .await
-                        .context("copy directory to guest")?;
-
-                    oci_mount.set_source(Some(PathBuf::from(&guest_path)));
-                    volume.mount = Some(oci_mount);
-
-                    // Start monitoring (only for watchable volumes)
-                    let mut monitor_task = None;
-                    if is_watchable_volume(&src) {
-                        let watcher = FsWatcher::new(&src).await?;
-                        let handle = watcher
-                            .start_monitor(agent.clone(), src.clone(), PathBuf::from(&guest_path))
-                            .await;
-                        monitor_task = Some(handle);
-                    }
-
-                    // Register monitor into Volume Manager
-                    volume_manager
-                        .register_monitor(&src.to_string_lossy(), monitor_task)
-                        .await?;
-                } else {
+                if !src.is_file() && !src.is_dir() {
                     // If not, we can ignore it. Let's issue a warning so that the user knows.
                     warn!(
                         sl!(),
                         "Ignoring non-regular file as FS sharing not supported. mount: {:?}", m
                     );
+                    return Ok(volume);
                 }
+
+                // Get or create the guest path
+                let lookup = volume_manager
+                    .get_or_create_volume(&src, src.is_dir(), cid, m.destination())
+                    .await
+                    .context("get or create volume")?;
+
+                if lookup.created {
+                    if let Err(err) =
+                        Self::copy_volume_to_guest(&src, &lookup, &agent, &volume_manager).await
+                    {
+                        volume_manager.release_volume(&lookup.key).await?;
+                        return Err(err);
+                    }
+                }
+                volume.volume_key = Some(lookup.key);
+
+                // set the oci::Mount structure of the volume
+                let mut oci_mount = oci::Mount::default();
+                oci_mount.set_destination(m.destination().clone());
+                oci_mount.set_typ(Some("bind".to_string()));
+                oci_mount.set_options(m.options().clone());
+                oci_mount.set_source(Some(PathBuf::from(&lookup.guest_path)));
+                volume.mount = Some(oci_mount);
             }
             Some(share_fs) => {
                 let share_fs_mount = share_fs.get_share_fs_mount();
@@ -595,6 +609,51 @@ impl ShareFsVolume {
             }
         }
         Ok(volume)
+    }
+
+    /// Copies a newly registered volume to the guest and, for watchable directories,
+    /// starts syncing later changes.
+    async fn copy_volume_to_guest(
+        src: &PathBuf,
+        lookup: &VolumeLookup,
+        agent: &Arc<dyn Agent>,
+        volume_manager: &VolumeManager,
+    ) -> Result<()> {
+        // If the mount source is a file, we can copy it to the sandbox
+        if src.is_file() {
+            // Copy a single file
+            return Self::copy_file_to_guest(src, &lookup.guest_path, agent)
+                .await
+                .context("copy file to guest");
+        }
+
+        // We allow directory copying wildly
+        // source path: "/var/lib/kubelet/pods/6dad7281-57ff-49e4-b844-c588ceabec16/volumes/kubernetes.io~projected/kube-api-access-8s2nl"
+        info!(sl!(), "copying directory {:?} to guest", src);
+
+        // Create directory
+        Self::copy_directory_to_guest(src, &lookup.guest_path, agent)
+            .await
+            .context("copy directory to guest")?;
+
+        // Start monitoring (only for watchable volumes)
+        let mut monitor_task = None;
+        if is_watchable_volume(src) {
+            let watcher = FsWatcher::new(src).await?;
+            let handle = watcher
+                .start_monitor(
+                    agent.clone(),
+                    src.clone(),
+                    PathBuf::from(&lookup.guest_path),
+                )
+                .await;
+            monitor_task = Some(handle);
+        }
+
+        // Register monitor into Volume Manager
+        volume_manager
+            .register_monitor(&lookup.key, monitor_task)
+            .await
     }
 
     async fn copy_file_to_guest(
@@ -708,10 +767,9 @@ impl Volume for ShareFsVolume {
             None => {
                 return {
                     // Release volume reference
-                    if let (Some(manager), Some(source)) = (&self.volume_manager, &self.source_path)
+                    if let (Some(manager), Some(source)) = (&self.volume_manager, &self.volume_key)
                     {
-                        let should_cleanup =
-                            manager.release_volume(source, &self.container_id).await?;
+                        let should_cleanup = manager.release_volume(source).await?;
 
                         if should_cleanup {
                             info!(
@@ -1286,5 +1344,90 @@ mod test {
             std::fs::read(source.join("sentinel")).unwrap(),
             b"volume data"
         );
+    }
+
+    #[actix_rt::test]
+    async fn test_volume_manager_same_source_shares_copy() {
+        let manager = VolumeManager::new();
+        let src = Path::new("/run/containerd/sandboxes/sid/resolv.conf");
+
+        let first = manager
+            .get_or_create_volume(src, false, "vpn", Path::new("/etc/resolv.conf"))
+            .await
+            .unwrap();
+        assert!(first.created);
+
+        let second = manager
+            .get_or_create_volume(src, false, "main", Path::new("/etc/resolv.conf"))
+            .await
+            .unwrap();
+        assert!(!second.created);
+        assert_eq!(second.key, first.key);
+        assert_eq!(second.guest_path, first.guest_path);
+
+        assert!(!manager.release_volume(&first.key).await.unwrap());
+        assert!(manager.release_volume(&first.key).await.unwrap());
+
+        // Once released, the next mount gets a fresh copy.
+        let third = manager
+            .get_or_create_volume(src, false, "main", Path::new("/etc/resolv.conf"))
+            .await
+            .unwrap();
+        assert!(third.created);
+    }
+
+    #[actix_rt::test]
+    async fn test_volume_manager_nested_source_uses_parent_copy() {
+        let manager = VolumeManager::new();
+
+        let parent = manager
+            .get_or_create_volume(Path::new("/vol/data"), true, "c1", Path::new("/data"))
+            .await
+            .unwrap();
+        assert!(parent.created);
+
+        let dir = manager
+            .get_or_create_volume(Path::new("/vol/data/sub"), true, "c2", Path::new("/sub"))
+            .await
+            .unwrap();
+        assert!(!dir.created);
+        assert_eq!(dir.key, parent.key);
+        assert_eq!(dir.guest_path, format!("{}/sub", parent.guest_path));
+
+        let file = manager
+            .get_or_create_volume(Path::new("/vol/data/sub/f"), false, "c2", Path::new("/f"))
+            .await
+            .unwrap();
+        assert!(!file.created);
+        assert_eq!(file.guest_path, format!("{}/sub/f", parent.guest_path));
+
+        // A sibling with a common name prefix is not nested.
+        let sibling = manager
+            .get_or_create_volume(Path::new("/vol/data2"), true, "c2", Path::new("/d2"))
+            .await
+            .unwrap();
+        assert!(sibling.created);
+
+        // The parent copy lives until its last user, nested ones included, is gone.
+        assert!(!manager.release_volume(&parent.key).await.unwrap());
+        assert!(!manager.release_volume(&parent.key).await.unwrap());
+        assert!(manager.release_volume(&parent.key).await.unwrap());
+    }
+
+    #[actix_rt::test]
+    async fn test_volume_manager_file_is_not_a_parent() {
+        let manager = VolumeManager::new();
+
+        let file = manager
+            .get_or_create_volume(Path::new("/vol/f"), false, "c1", Path::new("/f"))
+            .await
+            .unwrap();
+        // Paths below a copied file do not resolve into its copy.
+        let below = manager
+            .get_or_create_volume(Path::new("/vol/f/x"), false, "c1", Path::new("/x"))
+            .await
+            .unwrap();
+        assert!(below.created);
+        assert_ne!(below.key, file.key);
     }
 }
