@@ -107,8 +107,9 @@ impl CloudHypervisorInner {
         // Start by adding the default set of kernel parameters.
         let mut params = KernelParams::new(enable_debug);
 
+        // See SERIAL_CONSOLE in ch-config for why debug output avoids the serial port.
         #[cfg(target_arch = "x86_64")]
-        let console_param_debug = KernelParams::from_string("console=ttyS0,115200n8");
+        let console_param_debug = KernelParams::from_string("console=hvc0");
 
         #[cfg(target_arch = "aarch64")]
         let console_param_debug = KernelParams::from_string("console=ttyAMA0,115200n8");

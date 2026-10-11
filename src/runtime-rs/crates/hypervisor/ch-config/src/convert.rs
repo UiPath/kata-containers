@@ -111,8 +111,8 @@ impl TryFrom<NamedHypervisorConfig> for VmConfig {
 
         let disks = if !disks.is_empty() { Some(disks) } else { None };
 
-        let serial = get_serial_cfg(debug);
-        let console = get_console_cfg();
+        let serial = get_serial_cfg(debug, SERIAL_CONSOLE);
+        let console = get_console_cfg(debug, SERIAL_CONSOLE);
 
         let memory = match template_memory {
             Some(memory) => memory,
@@ -473,8 +473,13 @@ impl TryFrom<&BootInfo> for PmemConfig {
     }
 }
 
-fn get_serial_cfg(debug: bool) -> ConsoleConfig {
-    let mode = if debug {
+/// Whether the guest console in debug mode is the serial port. Elsewhere it is
+/// virtio-console: a serial port traps on every byte, which slows the boot and
+/// distorts timing. aarch64 only has the serial console wired up.
+const SERIAL_CONSOLE: bool = cfg!(target_arch = "aarch64");
+
+fn get_serial_cfg(debug: bool, serial_console: bool) -> ConsoleConfig {
+    let mode = if debug && serial_console {
         ConsoleOutputMode::Tty
     } else {
         ConsoleOutputMode::Off
@@ -487,10 +492,16 @@ fn get_serial_cfg(debug: bool) -> ConsoleConfig {
     }
 }
 
-fn get_console_cfg() -> ConsoleConfig {
+fn get_console_cfg(debug: bool, serial_console: bool) -> ConsoleConfig {
+    let mode = if debug && !serial_console {
+        ConsoleOutputMode::Tty
+    } else {
+        ConsoleOutputMode::Off
+    };
+
     ConsoleConfig {
         file: None,
-        mode: ConsoleOutputMode::Off,
+        mode,
         iommu: false.into(),
     }
 }
@@ -665,12 +676,14 @@ mod tests {
         #[derive(Debug)]
         struct TestData {
             debug: bool,
+            serial_console: bool,
             result: ConsoleConfig,
         }
 
         let tests = &[
             TestData {
                 debug: false,
+                serial_console: true,
                 result: ConsoleConfig {
                     file: None,
                     mode: ConsoleOutputMode::Off,
@@ -679,9 +692,28 @@ mod tests {
             },
             TestData {
                 debug: true,
+                serial_console: true,
                 result: ConsoleConfig {
                     file: None,
                     mode: ConsoleOutputMode::Tty,
+                    iommu: false.into(),
+                },
+            },
+            TestData {
+                debug: true,
+                serial_console: false,
+                result: ConsoleConfig {
+                    file: None,
+                    mode: ConsoleOutputMode::Off,
+                    iommu: false.into(),
+                },
+            },
+            TestData {
+                debug: false,
+                serial_console: false,
+                result: ConsoleConfig {
+                    file: None,
+                    mode: ConsoleOutputMode::Off,
                     iommu: false.into(),
                 },
             },
@@ -690,7 +722,7 @@ mod tests {
         for (i, d) in tests.iter().enumerate() {
             let msg = format!("test[{}]: {:?}", i, d);
 
-            let result = get_serial_cfg(d.debug);
+            let result = get_serial_cfg(d.debug, d.serial_console);
 
             let msg = format!("{}: actual result: {:?}", msg, result);
 
@@ -706,14 +738,22 @@ mod tests {
 
     #[test]
     fn test_get_console_cfg() {
-        assert_eq!(
-            get_console_cfg(),
-            ConsoleConfig {
-                file: None,
-                mode: ConsoleOutputMode::Off,
-                iommu: false.into(),
-            }
-        );
+        for (debug, serial_console, mode) in [
+            (false, true, ConsoleOutputMode::Off),
+            (true, true, ConsoleOutputMode::Off),
+            (true, false, ConsoleOutputMode::Tty),
+            (false, false, ConsoleOutputMode::Off),
+        ] {
+            assert_eq!(
+                get_console_cfg(debug, serial_console),
+                ConsoleConfig {
+                    file: None,
+                    mode,
+                    iommu: false.into(),
+                },
+                "debug: {debug}, serial_console: {serial_console}"
+            );
+        }
     }
 
     #[test]
