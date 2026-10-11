@@ -141,6 +141,7 @@ docker run \
 	--env SE_KERNEL_PARAMS="${SE_KERNEL_PARAMS:-}" \
 	--env FAKE_SE_IMAGE="${FAKE_SE_IMAGE:-}" \
 	--env ARCH="${ARCH}" \
+	--env INIT_DATA="${INIT_DATA}" \
 	--rm \
 	-w "${script_dir}" \
 	build-kata-deploy "${kata_deploy_create}" "$@"
