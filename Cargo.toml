@@ -199,6 +199,7 @@ nix = { features = [
   "mount",
   "process",
   "reboot",
+  "resource",
   "sched",
   "signal",
   "socket",
