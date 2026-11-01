@@ -672,6 +672,12 @@ pub struct CpuInfo {
     /// If unspecified, the option is omitted from the Cloud Hypervisor configuration.
     #[serde(default)]
     pub disable_nested_virtualization: Option<bool>,
+
+    /// Core scheduling mode for Cloud Hypervisor: `vm`, `vcpu` or `off`.
+    ///
+    /// If unspecified or empty, the option is omitted from the Cloud Hypervisor configuration.
+    #[serde(default)]
+    pub core_scheduling: String,
 }
 
 impl CpuInfo {
@@ -707,6 +713,12 @@ impl CpuInfo {
             return Err(std::io::Error::other(format!(
                 "The default_vcpus({}) is greater than default_maxvcpus({})",
                 self.default_vcpus, self.default_maxvcpus,
+            )));
+        }
+        if !matches!(self.core_scheduling.as_str(), "" | "vm" | "vcpu" | "off") {
+            return Err(std::io::Error::other(format!(
+                "Invalid core_scheduling \"{}\", expected \"vm\", \"vcpu\" or \"off\"",
+                self.core_scheduling,
             )));
         }
         Ok(())
@@ -2081,6 +2093,7 @@ mod tests {
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 0,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
                 output: CpuInfo {
                     cpu_features: "".to_string(),
@@ -2088,6 +2101,7 @@ mod tests {
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
             },
             TestData {
@@ -2098,6 +2112,7 @@ mod tests {
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 9999999,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
@@ -2105,6 +2120,7 @@ mod tests {
                     overhead_vcpus: 0.0,
                     default_maxvcpus: node_cpus as u32,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
             },
             TestData {
@@ -2115,6 +2131,7 @@ mod tests {
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
                 output: CpuInfo {
                     cpu_features: "a,b,c".to_string(),
@@ -2122,6 +2139,7 @@ mod tests {
                     overhead_vcpus: 0.0,
                     default_maxvcpus: 1,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
             },
             TestData {
@@ -2132,6 +2150,7 @@ mod tests {
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
                 output: CpuInfo {
                     cpu_features: "x,y".to_string(),
@@ -2139,6 +2158,7 @@ mod tests {
                     overhead_vcpus: 0.5,
                     default_maxvcpus: 2,
                     disable_nested_virtualization: None,
+                    core_scheduling: String::new(),
                 },
             },
         ];
@@ -2331,5 +2351,26 @@ mod tests {
             blockdev_info_with_sectors(65536, 512).validate().is_err(),
             "logical > physical should be rejected"
         );
+    }
+
+    #[test]
+    fn test_cpu_info_core_scheduling() {
+        for v in ["", "vm", "vcpu", "off"] {
+            let cpu: CpuInfo =
+                toml::from_str(&format!("default_maxvcpus = 1\ncore_scheduling = \"{v}\""))
+                    .unwrap();
+            assert_eq!(cpu.core_scheduling, v);
+            assert!(cpu.validate().is_ok(), "{} should be accepted", v);
+        }
+        let cpu: CpuInfo = toml::from_str("default_maxvcpus = 1").unwrap();
+        assert!(cpu.core_scheduling.is_empty());
+        for v in ["Off", "grouping", "none"] {
+            let cpu = CpuInfo {
+                default_maxvcpus: 1,
+                core_scheduling: v.to_string(),
+                ..Default::default()
+            };
+            assert!(cpu.validate().is_err(), "{} should be rejected", v);
+        }
     }
 }

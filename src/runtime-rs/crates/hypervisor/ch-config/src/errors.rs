@@ -65,6 +65,9 @@ pub enum CpusConfigError {
 
     #[error("Boot vCPUs cannot be larger than max vCPUs")]
     BootVPUsGtThanMaxVCPUs,
+
+    #[error("Invalid core scheduling mode: {0}")]
+    InvalidCoreScheduling(String),
 }
 
 #[derive(Error, Debug, PartialEq)]

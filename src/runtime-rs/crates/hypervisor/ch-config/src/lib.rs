@@ -100,6 +100,16 @@ pub struct CpusConfig {
     pub affinity: Option<Vec<CpuAffinity>>,
     #[serde(default)]
     pub features: CpuFeatures,
+    #[serde(default)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub core_scheduling: Option<CoreScheduling>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize)]
+pub enum CoreScheduling {
+    Vm,
+    Vcpu,
+    Off,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, Serialize)]

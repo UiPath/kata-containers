@@ -6,8 +6,9 @@ use crate::NamedHypervisorConfig;
 use crate::ProtectionDevConfig;
 use crate::VmConfig;
 use crate::{
-    ConsoleConfig, ConsoleOutputMode, CpuFeatures, CpuTopology, CpusConfig, DiskConfig, ImageType,
-    MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig, VsockConfig,
+    ConsoleConfig, ConsoleOutputMode, CoreScheduling, CpuFeatures, CpuTopology, CpusConfig,
+    DiskConfig, ImageType, MemoryConfig, MemoryZoneConfig, PayloadConfig, PmemConfig, RngConfig,
+    VsockConfig,
 };
 use anyhow::Result;
 use kata_types::config::default::DEFAULT_CH_ENTROPY_SOURCE;
@@ -326,6 +327,14 @@ impl TryFrom<CpuInfo> for CpusConfig {
 
         let features = CpuFeatures::from(cpu.cpu_features);
 
+        let core_scheduling = match cpu.core_scheduling.as_str() {
+            "" => None,
+            "vm" => Some(CoreScheduling::Vm),
+            "vcpu" => Some(CoreScheduling::Vcpu),
+            "off" => Some(CoreScheduling::Off),
+            v => return Err(CpusConfigError::InvalidCoreScheduling(v.to_string())),
+        };
+
         let cfg = CpusConfig {
             boot_vcpus,
             max_vcpus,
@@ -333,6 +342,7 @@ impl TryFrom<CpuInfo> for CpusConfig {
             max_phys_bits,
             topology: Some(topology),
             features,
+            core_scheduling,
 
             ..Default::default()
         };
@@ -1103,6 +1113,40 @@ mod tests {
             assert!(result.is_ok(), "{}", msg);
             assert_eq!(&result.unwrap(), d.result.as_ref().unwrap(), "{}", msg);
         }
+    }
+
+    #[test]
+    fn test_cpuinfo_core_scheduling_to_json() {
+        for (value, expected) in [
+            ("", None),
+            ("vm", Some("Vm")),
+            ("vcpu", Some("Vcpu")),
+            ("off", Some("Off")),
+        ] {
+            let cpu_info = CpuInfo {
+                default_vcpus: 1.0,
+                default_maxvcpus: 1,
+                core_scheduling: value.to_string(),
+                ..Default::default()
+            };
+            let json = serde_json::to_value(CpusConfig::try_from(cpu_info).unwrap()).unwrap();
+            assert_eq!(
+                json.get("core_scheduling").and_then(|v| v.as_str()),
+                expected,
+                "core_scheduling = {value:?}"
+            );
+        }
+
+        let cpu_info = CpuInfo {
+            default_vcpus: 1.0,
+            default_maxvcpus: 1,
+            core_scheduling: "grouping".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(
+            CpusConfig::try_from(cpu_info).unwrap_err(),
+            CpusConfigError::InvalidCoreScheduling("grouping".to_string())
+        );
     }
 
     #[test]

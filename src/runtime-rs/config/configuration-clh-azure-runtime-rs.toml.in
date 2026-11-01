@@ -93,6 +93,10 @@ default_maxvcpus = @DEFMAXVCPUS@
 # Disable nested virtualization in the guest.
 disable_nested_virtualization = @DEFDISABLENESTEDVIRTUALIZATION_CLH_AZURE@
 
+# Core scheduling mode for the VM threads: "vm", "vcpu" or "off". If unset, Cloud Hypervisor uses its default ("vm").
+# "off" removes the SMT side-channel isolation between VMs, but VM starts are faster under concurrency.
+#core_scheduling = "off"
+
 # Default memory size in MiB for SB/VM.
 # If unspecified then it will be set @DEFMEMSZ@ MiB.
 default_memory = @DEFMEMSZ@
