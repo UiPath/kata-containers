@@ -51,7 +51,7 @@ use std::{
     ops::Deref,
     os::unix::{
         ffi::{OsStrExt, OsStringExt},
-        fs::chown,
+        fs::{chown, MetadataExt},
     },
     path::{Path, PathBuf},
     sync::Arc,
@@ -253,6 +253,12 @@ impl RuntimeHandlerManagerInner {
         if config.runtime.disable_new_netns || dan_path.exists() {
             discard_created_netns(&mut sandbox_config.network_env)?;
             sandbox_config.network_env.netns = None;
+        } else if config.runtime.internetworking_model != "none"
+            && is_host_netns(sandbox_config.network_env.netns.as_deref())?
+        {
+            return Err(anyhow!(
+                "host networking requested, not supported by runtime"
+            ));
         }
 
         self.init_runtime_handler(sandbox_config, Arc::new(config), initial_size_manager)
@@ -831,6 +837,19 @@ fn discard_created_netns(network_env: &mut SandboxNetworkEnv) -> Result<()> {
     Ok(())
 }
 
+// Without a netns (none or empty) the VMM stays in the shim's own netns, so
+// both cases are the host network, whose interfaces the network rescan would
+// then attach to the VM. With internetworking_model "none" the rescan skips
+// the netns, so try_init() does not check it.
+fn is_host_netns(netns: Option<&str>) -> Result<bool> {
+    let Some(path) = netns.filter(|p| !p.is_empty()) else {
+        return Ok(true);
+    };
+    let requested = std::fs::metadata(path).with_context(|| format!("stat netns {}", path))?;
+    let own = std::fs::metadata("/proc/self/ns/net").context("stat own netns")?;
+    Ok(requested.dev() == own.dev() && requested.ino() == own.ino())
+}
+
 // RootlessEnv implements netns_rs::Env trait to provide the rootless directory path
 // for creating network namespace in rootless mode.
 #[derive(Copy, Clone, Default, Debug)]
@@ -1133,6 +1152,27 @@ mod tests {
         discard_created_netns(&mut network_env).unwrap();
         assert_eq!(network_env.netns, Some(path));
         assert!(dir.path().exists());
+    }
+
+    #[test]
+    fn test_is_host_netns() {
+        let own_task = format!(
+            "/proc/{}/task/{}/ns/net",
+            std::process::id(),
+            nix::unistd::gettid()
+        );
+        for path in [
+            None,
+            Some(""),
+            Some("/proc/self/ns/net"),
+            Some(own_task.as_str()),
+        ] {
+            assert!(is_host_netns(path).unwrap(), "{:?}", path);
+        }
+
+        let file = tempfile::NamedTempFile::new().unwrap();
+        assert!(!is_host_netns(file.path().to_str()).unwrap());
+        assert!(is_host_netns(Some("/nonexistent/ns/net")).is_err());
     }
 
     // A ShutdownContainer RPC that arrives before any runtime instance was
