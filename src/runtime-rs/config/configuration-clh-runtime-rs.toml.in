@@ -229,6 +229,10 @@ num_queues = 1
 # Default: 1, Range: 1..=256
 network_queues = @DEFNETQUEUES@
 
+# virtio-net offloads (csum, tso, ufo: on|off). All off by default because of CVE-2026-99999 (host kernel
+# checksum bug, fixed upstream in 6785011f8b16). tso gives most of the guest TX gain. tso and ufo need csum.
+#net_options = "csum=on,tso=on,ufo=off"
+
 # Enable pre allocation of VM RAM, default false
 # Enabling this will result in lower container density
 # as all of the memory will be allocated and locked

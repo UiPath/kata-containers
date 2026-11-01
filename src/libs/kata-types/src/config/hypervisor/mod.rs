@@ -1261,6 +1261,12 @@ pub struct NetworkInfo {
     /// Configures the number of network queues.
     #[serde(default)]
     pub network_queues: u32,
+
+    /// virtio-net offloads for Cloud Hypervisor, e.g. `csum=on,tso=on,ufo=off`.
+    ///
+    /// Keys are `csum`, `tso` and `ufo`; values are `on` or `off`. Keys left out are off.
+    #[serde(default)]
+    pub net_options: String,
 }
 
 impl NetworkInfo {
@@ -1278,10 +1284,55 @@ impl NetworkInfo {
     }
 
     /// Validates the network configuration information.
-    /// (Currently, this method performs no specific validations beyond basic type checks.)
     pub fn validate(&self) -> Result<()> {
+        let offloads = self.net_offloads()?;
+        // Cloud Hypervisor rejects TSO or UFO without checksum offload.
+        if !offloads.csum && (offloads.tso || offloads.ufo) {
+            return Err(std::io::Error::other(
+                "net_options: tso=on or ufo=on needs csum=on",
+            ));
+        }
         Ok(())
     }
+
+    /// Parses the virtio-net offloads from `net_options`.
+    pub fn net_offloads(&self) -> Result<NetOffloads> {
+        let mut offloads = NetOffloads::default();
+        if self.net_options.is_empty() {
+            return Ok(offloads);
+        }
+        for pair in self.net_options.split(',') {
+            let invalid = || {
+                std::io::Error::other(format!(
+                    "Invalid net_options entry \"{pair}\", expected csum, tso or ufo set to on or off",
+                ))
+            };
+            let (key, value) = pair.split_once('=').ok_or_else(invalid)?;
+            let on = match value {
+                "on" => true,
+                "off" => false,
+                _ => return Err(invalid()),
+            };
+            match key {
+                "csum" => offloads.csum = on,
+                "tso" => offloads.tso = on,
+                "ufo" => offloads.ufo = on,
+                _ => return Err(invalid()),
+            }
+        }
+        Ok(offloads)
+    }
+}
+
+/// virtio-net offloads parsed from `NetworkInfo::net_options`.
+#[derive(Debug, Default, PartialEq)]
+pub struct NetOffloads {
+    /// Checksum offload (`offload_csum`).
+    pub csum: bool,
+    /// TCP segmentation offload (`offload_tso`).
+    pub tso: bool,
+    /// UDP fragmentation offload (`offload_ufo`).
+    pub ufo: bool,
 }
 
 /// Configuration information for rootless user.
@@ -2371,6 +2422,32 @@ mod tests {
                 ..Default::default()
             };
             assert!(cpu.validate().is_err(), "{} should be rejected", v);
+        }
+    }
+
+    #[test]
+    fn test_network_info_net_options() {
+        let net: NetworkInfo = toml::from_str("").unwrap();
+        assert_eq!(net.net_offloads().unwrap(), NetOffloads::default());
+
+        for (options, valid) in [
+            ("", true),
+            ("csum=on", true),
+            ("csum=on,tso=on,ufo=off", true),
+            ("tso=off,ufo=off", true),
+            ("tso=on", false),
+            ("csum=off,ufo=on", false),
+            ("gso=on", false),
+            ("csum=yes", false),
+            ("csum", false),
+            ("csum=on,", false),
+            ("csum=on;tso=on", false),
+        ] {
+            let net = NetworkInfo {
+                net_options: options.to_string(),
+                ..Default::default()
+            };
+            assert_eq!(net.validate().is_ok(), valid, "{options:?}");
         }
     }
 }

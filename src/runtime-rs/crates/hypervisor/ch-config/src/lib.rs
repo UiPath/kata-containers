@@ -335,6 +335,12 @@ pub struct NetConfig {
     #[serde(default)]
     #[serde(skip_serializing_if = "u16_is_zero")]
     pub pci_segment: u16,
+    #[serde(default)]
+    pub offload_tso: bool,
+    #[serde(default)]
+    pub offload_ufo: bool,
+    #[serde(default)]
+    pub offload_csum: bool,
 }
 
 impl Default for NetConfig {
@@ -356,6 +362,9 @@ impl Default for NetConfig {
             fds: None,
             rate_limiter_config: None,
             pci_segment: 0,
+            offload_tso: false,
+            offload_ufo: false,
+            offload_csum: false,
         }
     }
 }

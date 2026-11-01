@@ -307,6 +307,17 @@ impl CloudHypervisorInner {
         Ok(disk_config)
     }
 
+    fn make_net_config(&self, config: NetworkConfig) -> Result<NetConfig> {
+        let mut net_config = NetConfig::try_from(config)?;
+
+        let offloads = self.config.network_info.net_offloads()?;
+        net_config.offload_csum = offloads.csum;
+        net_config.offload_tso = offloads.tso;
+        net_config.offload_ufo = offloads.ufo;
+
+        Ok(net_config)
+    }
+
     fn is_vm_boot_file(&self, path: &str) -> bool {
         let boot_info = &self.config.boot_info;
 
@@ -347,7 +358,7 @@ impl CloudHypervisorInner {
     async fn handle_network_device(&mut self, device: NetworkDevice) -> Result<DeviceType> {
         let netdev = device.clone();
 
-        let mut clh_net_config = NetConfig::try_from(device.config)?;
+        let mut clh_net_config = self.make_net_config(device.config)?;
         // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
         clh_net_config.tap = None;
         clh_net_config.id = None;
@@ -398,7 +409,7 @@ impl CloudHypervisorInner {
                 DeviceType::Network(net_device) => {
                     let network_queues_pairs = net_device.config.queue_num;
 
-                    let mut net_config = NetConfig::try_from(net_device.config.clone())?;
+                    let mut net_config = self.make_net_config(net_device.config.clone())?;
                     // When using fds to pass the tap device to cloud-hypervisor, tap and id fields should be None
                     net_config.tap = None;
                     net_config.id = None;
@@ -726,6 +737,27 @@ mod tests {
         let net = NetConfig::try_from(cfg);
         assert!(net.is_ok());
         assert_eq!(net.unwrap(), expected);
+    }
+
+    #[test]
+    fn test_net_options_to_json() {
+        let cfg = NetworkConfig {
+            guest_mac: Some(Address([10, 11, 128, 3, 4, 5])),
+            ..Default::default()
+        };
+        let fields = ["offload_csum", "offload_tso", "offload_ufo"];
+        // Empty (default), then each key on its own.
+        for key in ["", "csum", "tso", "ufo"] {
+            let mut clh = CloudHypervisorInner::default();
+            if !key.is_empty() {
+                clh.config.network_info.net_options = format!("{key}=on");
+            }
+            let json = serde_json::to_value(clh.make_net_config(cfg.clone()).unwrap()).unwrap();
+            for field in fields {
+                let expected = field == format!("offload_{key}");
+                assert_eq!(json[field], expected, "{field} with {key:?} on");
+            }
+        }
     }
 
     #[tokio::test]
