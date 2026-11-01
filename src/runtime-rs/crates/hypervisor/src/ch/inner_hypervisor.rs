@@ -39,14 +39,13 @@ use std::collections::HashMap;
 use std::convert::TryFrom;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::os::unix::net::UnixStream;
+use std::os::unix::io::AsRawFd;
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::BufReader;
 use tokio::process::{Child, Command};
 use tokio::sync::watch::Receiver;
-use tokio::task;
-use tokio::task::JoinHandle;
 use tokio::time::Duration;
 use tokio::{io::AsyncBufReadExt, sync::mpsc};
 
@@ -78,10 +77,6 @@ impl CloudHypervisorInner {
         self.cloud_hypervisor_launch(timeout_secs)
             .await
             .context("launch failed")?;
-
-        self.cloud_hypervisor_setup_comms()
-            .await
-            .context("comms setup failed")?;
 
         self.cloud_hypervisor_check_running()
             .await
@@ -375,49 +370,6 @@ impl CloudHypervisorInner {
         Ok(())
     }
 
-    async fn cloud_hypervisor_setup_comms(&mut self) -> Result<()> {
-        let api_socket_path = get_api_socket_path(&self.id)?;
-
-        // The hypervisor has just been spawned, but may not yet have created
-        // the API socket, so repeatedly try to connect for up to
-        // timeout_secs.
-        let join_handle: JoinHandle<Result<UnixStream>> =
-            task::spawn_blocking(move || -> Result<UnixStream> {
-                let api_socket: UnixStream;
-
-                loop {
-                    let result = UnixStream::connect(api_socket_path.clone());
-
-                    if let Ok(result) = result {
-                        api_socket = result;
-                        break;
-                    }
-
-                    std::thread::sleep(Duration::from_millis(CH_POLL_TIME_MS));
-                }
-
-                Ok(api_socket)
-            });
-
-        let timeout_msg = format!(
-            "API socket connect timed out after {} seconds",
-            self.timeout_secs
-        );
-
-        let result =
-            tokio::time::timeout(Duration::from_secs(self.timeout_secs as u64), join_handle)
-                .await
-                .context(timeout_msg)?;
-
-        let result = result?;
-
-        let api_socket = result?;
-
-        *self.api_socket.lock().await = Some(api_socket);
-
-        Ok(())
-    }
-
     async fn cloud_hypervisor_check_running(&mut self) -> Result<()> {
         let timeout_secs = self.timeout_secs;
 
@@ -455,6 +407,15 @@ impl CloudHypervisorInner {
 
         let _ = std::fs::remove_file(api_socket_path.clone());
 
+        // Create the API socket here and pass the listening fd to CH: the
+        // connect succeeds at once and requests queue until CH accepts, so
+        // there is no need to poll for CH to create the socket.
+        let api_listener = UnixListener::bind(&api_socket_path)
+            .with_context(|| format!("bind API socket {api_socket_path}"))?;
+        let api_fd = api_listener.as_raw_fd();
+        *self.api_socket.lock().await =
+            Some(UnixStream::connect(&api_socket_path).context("connect API socket")?);
+
         let binary_path = cfg.path.to_string();
 
         let path = Path::new(&binary_path).canonicalize()?;
@@ -469,7 +430,7 @@ impl CloudHypervisorInner {
 
         cmd.env("RUST_BACKTRACE", "full");
 
-        cmd.args(["--api-socket", &api_socket_path]);
+        cmd.args(["--api-socket", &format!("fd={api_fd}")]);
 
         if let Some(extra_args) = &self.extra_args {
             cmd.args(extra_args);
@@ -510,6 +471,10 @@ impl CloudHypervisorInner {
 
         unsafe {
             let _pre = cmd.pre_exec(move || {
+                // Only the child inherits the API listener.
+                if libc::fcntl(api_fd, libc::F_SETFD, 0) < 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
                 if let Some(netns_path) = &netns {
                     let netns_fd = std::fs::File::open(netns_path);
                     let _ = setns(&netns_fd?, CloneFlags::CLONE_NEWNET).context("set netns failed");
@@ -526,6 +491,9 @@ impl CloudHypervisorInner {
         debug!(sl!(), "launching {} as: {:?}", CH_NAME, cmd);
 
         let child = cmd.spawn().context(format!("{CH_NAME} spawn failed"))?;
+
+        // CH holds its own copy of the listener.
+        drop(api_listener);
 
         // Save process PID
         self.pid = child.id();
