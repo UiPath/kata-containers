@@ -481,11 +481,15 @@ pub fn create_dir_all_with_inherit_owner<P: AsRef<Path>>(path: P, perm: u32) -> 
                 uid = Uid::from_raw(s.st_uid);
                 gid = Gid::from_raw(s.st_gid);
             }
-            Err(nix::Error::ENOENT) => {
-                std::fs::create_dir(current)?;
-                set_permissions(current, Permissions::from_mode(perm))?;
-                chown(current, Some(uid), Some(gid))?;
-            }
+            Err(nix::Error::ENOENT) => match std::fs::create_dir(current) {
+                Ok(()) => {
+                    set_permissions(current, Permissions::from_mode(perm))?;
+                    chown(current, Some(uid), Some(gid))?;
+                }
+                // Another task created it after our stat; leave it to its creator.
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists && current.is_dir() => {}
+                Err(e) => return Err(e),
+            },
             Err(e) => {
                 return Err(io::Error::from_raw_os_error(e as i32));
             }
